@@ -1,0 +1,326 @@
+{% extends "base.html" %}
+
+{% block head_extra %}
+<style>
+    /* Table styles */
+    .table-responsive {
+        max-height: 75vh;
+        border-bottom: 1px solid #e6e7e9;
+    }
+
+    /* Fixed header */
+    th {
+        white-space: nowrap;
+        background-color: #f8fafc !important;
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        box-shadow: 0 1px 0 #e6e7e9;
+        font-weight: 600;
+        color: #667085;
+        font-size: 0.875rem;
+        text-align: center;
+        vertical-align: middle;
+    }
+
+    /* Column widths */
+    th.w-number {
+        width: 60px;
+        min-width: 60px;
+    }
+
+    th.w-text-sm {
+        min-width: 100px;
+    }
+
+    th.w-text-md {
+        min-width: 150px;
+    }
+
+    th.w-count {
+        width: 80px;
+        min-width: 80px;
+    }
+
+    /* Editable cell styles */
+    .editable-cell {
+        padding: 0 !important;
+    }
+
+    .editable-cell input {
+        border: none;
+        background: transparent;
+        width: 100%;
+        height: 100%;
+        padding: 0.5rem 0.5rem;
+        font-family: inherit;
+        font-size: 14px;
+        color: inherit;
+        cursor: default;
+        text-align: center;
+        /* Numeric values centered */
+    }
+
+    .editable-cell input.text-start {
+        text-align: left;
+    }
+
+    /* Edit mode styles */
+    .editable-cell input:not([readonly]) {
+        cursor: text;
+        background-color: #fff;
+        box-shadow: inset 0 0 0 1px #dce1e7;
+    }
+
+    .editable-cell input:not([readonly]):focus {
+        outline: 2px solid #206bc4;
+        z-index: 5;
+        position: relative;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-xl">
+    <!-- Header & Actions -->
+    <div class="row g-2 align-items-center mb-3">
+        <div class="col">
+            <h2 class="page-title">部门配置管理</h2>
+            <div class="text-muted mt-1">共 {{ depts|length }} 个部门 <span id="status-badge"
+                    class="badge bg-green-lt ms-2">查看模式</span></div>
+        </div>
+        <div class="col-auto ms-auto d-print-none">
+            <div class="btn-list">
+                <input type="file" id="excelFile" accept=".xls,.xlsx" style="display: none;" onchange="uploadFile()">
+
+                <button class="btn btn-white" onclick="document.getElementById('excelFile').click()">
+                    <i class="ti ti-upload me-2"></i>导入配置表
+                </button>
+                <button class="btn btn-white" onclick="exportData()">
+                    <i class="ti ti-download me-2"></i>导出
+                </button>
+
+                <div class="vr mx-2"></div>
+
+                <button id="btn-edit" class="btn btn-primary" onclick="toggleEditMode(true)">
+                    <i class="ti ti-pencil me-2"></i>开启编辑
+                </button>
+
+                <div id="action-group" style="display: none;">
+                    <button class="btn btn-ghost-danger me-2" onclick="cancelEdit()">取消</button>
+                    <button class="btn btn-primary" onclick="saveData()">
+                        <i class="ti ti-device-floppy me-2"></i>保存修改
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Data Table -->
+    <div class="card">
+        <div class="table-responsive">
+            <table class="table table-vcenter table-bordered card-table table-striped table-hover" id="deptTable">
+                <thead>
+                    <tr>
+                        <th class="w-number">排序号</th>
+                        <th class="w-text-md">部门名称<span class="text-red">*</span></th>
+                        <th class="w-text-sm">部门代码<span class="text-red">*</span></th>
+                        <th class="w-text-sm">部门类型<span class="text-red">*</span></th>
+                        <th class="w-count" title="院领导账号数量">院领导<br>账号</th>
+                        <th class="w-count" title="正职账号数据量">正职<br>账号</th>
+                        <th class="w-count" title="副职账号数量">副职<br>账号</th>
+                        <th class="w-count" title="中心基层领导账号数量">基层<br>账号</th>
+                        <th class="w-count" title="其他员工账号数量">其他<br>账号</th>
+                        <th class="w-count" title="可被评为优秀人数">优秀<br>名额</th>
+                        <th class="w-count" title="推荐正职人数">推正<br>名额</th>
+                        <th class="w-count" title="推荐副职人数">推副<br>名额</th>
+                        <th class="w-text-sm">部门主管领导</th>
+                        <th class="w-text-sm">部门分管领导</th>
+                        <th class="w-1 text-center" style="min-width: 50px;">操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for d in depts %}
+                    <tr>
+                        <td class="editable-cell"><input type="number" name="sort_no" value="{{ d.sort_no or '' }}"
+                                readonly></td>
+                        <td class="editable-cell"><input type="text" name="dept_name" value="{{ d.dept_name or '' }}"
+                                class="text-start" required readonly></td>
+                        <td class="editable-cell"><input type="text" name="dept_code" value="{{ d.dept_code or '' }}"
+                                readonly></td>
+                        <td class="editable-cell"><input type="text" name="dept_type" value="{{ d.dept_type or '' }}"
+                                readonly></td>
+
+                        <td class="editable-cell"><input type="number" name="count_college_leader"
+                                value="{{ d.count_college_leader }}" readonly></td>
+                        <td class="editable-cell"><input type="number" name="count_principal"
+                                value="{{ d.count_principal }}" readonly></td>
+                        <td class="editable-cell"><input type="number" name="count_deputy" value="{{ d.count_deputy }}"
+                                readonly></td>
+                        <td class="editable-cell"><input type="number" name="count_center_leader"
+                                value="{{ d.count_center_leader }}" readonly></td>
+                        <td class="editable-cell"><input type="number" name="count_other" value="{{ d.count_other }}"
+                                readonly></td>
+
+                        <td class="editable-cell"><input type="number" name="count_excellent"
+                                value="{{ d.count_excellent }}" readonly></td>
+                        <td class="editable-cell"><input type="number" name="count_recommend_principal"
+                                value="{{ d.count_recommend_principal }}" readonly></td>
+                        <td class="editable-cell"><input type="number" name="count_recommend_deputy"
+                                value="{{ d.count_recommend_deputy }}" readonly></td>
+
+                        <td class="editable-cell"><input type="text" name="leader_main"
+                                value="{{ d.leader_main or '' }}" class="text-start" readonly></td>
+                        <td class="editable-cell"><input type="text" name="leader_sub" value="{{ d.leader_sub or '' }}"
+                                class="text-start" readonly></td>
+
+                        <td class="text-center">
+                            <a href="#" class="link-secondary disabled delete-btn" onclick="deleteRow(this)"><i
+                                    class="ti ti-trash"></i></a>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr id="empty-row">
+                        <td colspan="15" class="text-center text-muted py-5">暂无部门数据，请导入Excel文件</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <div class="card-footer d-flex align-items-center">
+            <button id="btn-add-row" class="btn btn-ghost-primary disabled" onclick="addRow()" disabled>
+                <i class="ti ti-plus me-1"></i>新增部门
+            </button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block script_extra %}
+<script>
+    // Toggle Edit Mode
+    function toggleEditMode(isEdit) {
+        document.querySelectorAll('#deptTable input').forEach(el => el.readOnly = !isEdit);
+
+        document.querySelectorAll('.delete-btn').forEach(el => {
+            el.classList.toggle('disabled', !isEdit);
+            el.classList.toggle('link-secondary', !isEdit);
+            el.classList.toggle('link-danger', isEdit);
+        });
+
+        const btnAdd = document.getElementById('btn-add-row');
+        btnAdd.classList.toggle('disabled', !isEdit);
+        btnAdd.disabled = !isEdit;
+
+        document.getElementById('btn-edit').style.display = isEdit ? 'none' : 'inline-block';
+        document.getElementById('action-group').style.display = isEdit ? 'inline-block' : 'none';
+
+        const badge = document.getElementById('status-badge');
+        badge.className = isEdit ? 'badge bg-orange-lt ms-2' : 'badge bg-green-lt ms-2';
+        badge.innerText = isEdit ? '编辑中...' : '查看模式';
+    }
+
+    function cancelEdit() {
+        if (confirm('取消将丢失未保存的修改，确定吗？')) window.location.reload();
+    }
+
+    function exportData() {
+        window.location.href = "/api/department/export";
+    }
+
+    function deleteRow(btn) {
+        if (!btn.classList.contains('disabled') && confirm('确定移除该部门？(需保存后生效)')) {
+            btn.closest('tr').remove();
+        }
+    }
+
+    async function uploadFile() {
+        const file = document.getElementById('excelFile').files[0];
+        if (!file || !confirm('警告：导入将覆盖当前所有部门配置，确定继续吗？')) return;
+
+        const fd = new FormData();
+        fd.append('file', file);
+
+        document.body.style.cursor = 'wait';
+        try {
+            const res = await (await fetch('/api/department/upload', { method: 'POST', body: fd })).json();
+            alert(res.msg);
+            if (res.success) window.location.reload();
+        } catch (e) {
+            alert('上传失败: ' + e);
+        } finally {
+            document.body.style.cursor = 'default';
+            document.getElementById('excelFile').value = '';
+        }
+    }
+
+    async function saveData() {
+        const rows = document.querySelectorAll('#deptTable tbody tr');
+        const data = [];
+
+        if (rows.length === 1 && rows[0].id === 'empty-row') return alert('无数据可保存');
+
+        let err = false;
+        rows.forEach(row => {
+            const inputs = row.querySelectorAll('input');
+            if (inputs.length === 0) return;
+
+            const obj = {};
+            inputs.forEach(inp => {
+                // Validation
+                if (['dept_name', 'dept_code', 'dept_type'].includes(inp.name) && !inp.value.trim()) {
+                    inp.closest('td').style.boxShadow = 'inset 0 0 0 2px red';
+                    err = true;
+                } else if (inp.type === 'number' && inp.value < 0) {
+                    inp.closest('td').style.boxShadow = 'inset 0 0 0 2px red';
+                    err = true;
+                } else {
+                    inp.closest('td').style.boxShadow = 'none';
+                }
+                obj[inp.name] = inp.value;
+            });
+            if (obj.dept_name) data.push(obj);
+        });
+
+        if (err) return alert('请检查必填项或数值范围');
+
+        document.body.style.cursor = 'wait';
+        try {
+            const res = await (await fetch('/api/department/save', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ data })
+            })).json();
+
+            alert(res.msg);
+            if (res.success) window.location.reload();
+        } catch (e) {
+            alert('保存失败: ' + e);
+        } finally {
+            document.body.style.cursor = 'default';
+        }
+    }
+
+    function addRow() {
+        document.getElementById('empty-row')?.remove();
+        const html = `<tr>
+            <td class="editable-cell"><input type="number" name="sort_no"></td>
+            <td class="editable-cell"><input type="text" name="dept_name" class="text-start" required></td>
+            <td class="editable-cell"><input type="text" name="dept_code"></td>
+            <td class="editable-cell"><input type="text" name="dept_type"></td>
+            <td class="editable-cell"><input type="number" name="count_college_leader" value="0"></td>
+            <td class="editable-cell"><input type="number" name="count_principal" value="0"></td>
+            <td class="editable-cell"><input type="number" name="count_deputy" value="0"></td>
+            <td class="editable-cell"><input type="number" name="count_center_leader" value="0"></td>
+            <td class="editable-cell"><input type="number" name="count_other" value="0"></td>
+            <td class="editable-cell"><input type="number" name="count_excellent" value="0"></td>
+            <td class="editable-cell"><input type="number" name="count_recommend_principal" value="0"></td>
+            <td class="editable-cell"><input type="number" name="count_recommend_deputy" value="0"></td>
+            <td class="editable-cell"><input type="text" name="leader_main" class="text-start"></td>
+            <td class="editable-cell"><input type="text" name="leader_sub" class="text-start"></td>
+            <td class="text-center"><a href="#" class="link-danger delete-btn" onclick="deleteRow(this)"><i class="ti ti-trash"></i></a></td>
+        </tr>`;
+        document.querySelector('#deptTable tbody').insertAdjacentHTML('beforeend', html);
+    }
+</script>
+{% endblock %}

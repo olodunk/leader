@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>中层干部测评系统</title>
+
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/tabler.min.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/tabler-icons.min.css') }}">
+
+  <style>
+    :root {
+      --tblr-font-sans-serif: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+
+    body {
+      font-feature-settings: "cv03", "cv04", "cv11";
+      background-color: #f4f6fa;
+    }
+
+    /* 侧边栏激活样式 */
+    .navbar-vertical .nav-item.active .nav-link {
+      background-color: rgba(32, 107, 196, 0.06);
+      color: #206bc4;
+      font-weight: 600;
+    }
+
+    .navbar-vertical .dropdown-menu {
+      max-height: 50vh;
+      overflow-y: auto;
+    }
+  </style>
+
+  {% block head_extra %}{% endblock %}
+</head>
+
+<body class="layout-fluid">
+  <div class="page">
+
+    <aside class="navbar navbar-vertical navbar-expand-lg navbar-light">
+      <div class="container-fluid">
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#sidebar-menu"><span
+            class="navbar-toggler-icon"></span></button>
+
+        <h1 class="navbar-brand navbar-brand-autodark">
+          <a href="/" class="text-decoration-none text-primary d-flex align-items-center gap-2">
+            <i class="ti ti-chart-radar fs-2"></i><span class="text-dark">测评系统</span>
+          </a>
+        </h1>
+
+        <div class="collapse navbar-collapse" id="sidebar-menu">
+          <ul class="navbar-nav pt-lg-3">
+
+            <li class="nav-item {% if request.endpoint == 'index' %}active{% endif %}">
+              <a class="nav-link" href="/"><span class="nav-link-icon d-md-none d-lg-inline-block"><i
+                    class="ti ti-dashboard"></i></span><span class="nav-link-title">仪表盘</span></a>
+            </li>
+
+            {% set import_active = request.endpoint in ['department_config', 'personnel_management',
+            'recommend_principal', 'recommend_deputy'] %}
+            <li class="nav-item dropdown">
+              <a class="nav-link dropdown-toggle {% if import_active %}show{% endif %}" href="#navbar-import"
+                data-bs-toggle="dropdown" role="button" aria-expanded="{{ 'true' if import_active else 'false' }}">
+                <span class="nav-link-icon d-md-none d-lg-inline-block"><i
+                    class="ti ti-database-import"></i></span><span class="nav-link-title">数据导入</span>
+              </a>
+              <div class="dropdown-menu {% if import_active %}show{% endif %}">
+                <div class="dropdown-menu-columns">
+                  <div class="dropdown-menu-column">
+
+                    <a class="dropdown-item {% if request.endpoint == 'department_config' %}active{% endif %}"
+                      href="{{ url_for('department_config') }}">部门配置</a>
+
+                    <a class="dropdown-item {% if request.endpoint == 'personnel_management' %}active{% endif %}"
+                      href="{{ url_for('personnel_management') }}">中级管理人员</a>
+
+                    <a class="dropdown-item {% if request.endpoint == 'recommend_principal' %}active{% endif %}"
+                      href="{{ url_for('recommend_principal') }}">正职推荐</a>
+                    <a class="dropdown-item {% if request.endpoint == 'recommend_deputy' %}active{% endif %}"
+                      href="{{ url_for('recommend_deputy') }}">副职推荐</a>
+                  </div>
+                </div>
+              </div>
+            </li>
+
+            <li class="nav-item"><a class="nav-link" href="#"><span class="nav-link-icon d-md-none d-lg-inline-block"><i
+                    class="ti ti-user-plus"></i></span><span class="nav-link-title">账号生成</span></a></li>
+
+            <li class="nav-item"><a class="nav-link" href="#"><span class="nav-link-icon d-md-none d-lg-inline-block"><i
+                    class="ti ti-activity"></i></span><span class="nav-link-title">进度与结果</span></a></li>
+
+            <li class="nav-item dropdown"><a class="nav-link dropdown-toggle" href="#navbar-config"
+                data-bs-toggle="dropdown"><span class="nav-link-icon d-md-none d-lg-inline-block"><i
+                    class="ti ti-settings"></i></span><span class="nav-link-title">权重配置</span></a>
+              <div class="dropdown-menu"><a class="dropdown-item" href="#">部门权重配置</a><a class="dropdown-item"
+                  href="#">院领导权重配置</a></div>
+            </li>
+
+            <li class="nav-item dropdown"><a class="nav-link dropdown-toggle" href="#navbar-stats"
+                data-bs-toggle="dropdown"><span class="nav-link-icon d-md-none d-lg-inline-block"><i
+                    class="ti ti-chart-bar"></i></span><span class="nav-link-title">数据统计</span></a>
+              <div class="dropdown-menu">
+                <div class="dropdown-menu-columns">
+                  <div class="dropdown-menu-column">
+                    <a class="dropdown-item" href="#">领导班子汇总得分</a>
+                    <a class="dropdown-item" href="#">领导班子打分明细</a>
+                    <a class="dropdown-item" href="#">被考核人汇总得分</a>
+                    <a class="dropdown-item" href="#">被考核人打分明细</a>
+                    <a class="dropdown-item" href="#">后备干部推荐（正职）汇总</a>
+                    <a class="dropdown-item" href="#">后备干部推荐（副职）汇总</a>
+                    <a class="dropdown-item" href="#">新提拔任用干部民主评议表</a>
+                    <a class="dropdown-item" href="#">干部选拔任用工作民主评议表</a>
+                  </div>
+                </div>
+              </div>
+            </li>
+
+          </ul>
+        </div>
+      </div>
+    </aside>
+
+    <div class="page-wrapper">
+      <div class="page-body">
+        {% block content %}{% endblock %}
+      </div>
+    </div>
+
+  </div>
+
+  <script src="{{ url_for('static', filename='js/tabler.min.js') }}"></script>
+  {% block script_extra %}{% endblock %}
+</body>
+
+</html>
