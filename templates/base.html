@@ -84,17 +84,28 @@
               </div>
             </li>
 
-            <li class="nav-item"><a class="nav-link" href="#"><span class="nav-link-icon d-md-none d-lg-inline-block"><i
-                    class="ti ti-user-plus"></i></span><span class="nav-link-title">账号生成</span></a></li>
+            <li class="nav-item {% if request.endpoint == 'account_generation' %}active{% endif %}">
+              <a class="nav-link" href="{{ url_for('account_generation') }}"><span
+                  class="nav-link-icon d-md-none d-lg-inline-block"><i class="ti ti-user-plus"></i></span><span
+                  class="nav-link-title">账号生成</span></a>
+            </li>
+
 
             <li class="nav-item"><a class="nav-link" href="#"><span class="nav-link-icon d-md-none d-lg-inline-block"><i
                     class="ti ti-activity"></i></span><span class="nav-link-title">进度与结果</span></a></li>
 
-            <li class="nav-item dropdown"><a class="nav-link dropdown-toggle" href="#navbar-config"
-                data-bs-toggle="dropdown"><span class="nav-link-icon d-md-none d-lg-inline-block"><i
-                    class="ti ti-settings"></i></span><span class="nav-link-title">权重配置</span></a>
-              <div class="dropdown-menu"><a class="dropdown-item" href="#">部门权重配置</a><a class="dropdown-item"
-                  href="#">院领导权重配置</a></div>
+            {% set config_active = request.endpoint in ['weight_config_dept'] %}
+            <li class="nav-item dropdown">
+              <a class="nav-link dropdown-toggle {% if config_active %}show{% endif %}" href="#navbar-config"
+                data-bs-toggle="dropdown" role="button" aria-expanded="{{ 'true' if config_active else 'false' }}">
+                <span class="nav-link-icon d-md-none d-lg-inline-block"><i class="ti ti-settings"></i></span><span
+                  class="nav-link-title">权重配置</span>
+              </a>
+              <div class="dropdown-menu {% if config_active %}show{% endif %}">
+                <a class="dropdown-item {% if request.endpoint == 'weight_config_dept' %}active{% endif %}"
+                  href="{{ url_for('weight_config_dept') }}">部门权重配置</a>
+                <a class="dropdown-item" href="#">院领导权重配置</a>
+              </div>
             </li>
 
             <li class="nav-item dropdown"><a class="nav-link dropdown-toggle" href="#navbar-stats"
@@ -116,6 +127,12 @@
               </div>
             </li>
 
+            <li class="nav-item mt-auto">
+              <a class="nav-link text-danger" href="{{ url_for('logout') }}">
+                <span class="nav-link-icon d-md-none d-lg-inline-block"><i class="ti ti-logout"></i></span>
+                <span class="nav-link-title">安全退出</span>
+              </a>
+            </li>
           </ul>
         </div>
       </div>

@@ -1,0 +1,324 @@
+{% extends "base.html" %}
+
+{% block head_extra %}
+<style>
+    .table-responsive {
+        max-height: 70vh;
+        border-bottom: 1px solid #e6e7e9;
+    }
+
+    th {
+        white-space: nowrap;
+        background-color: #f8fafc !important;
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        box-shadow: 0 1px 0 #e6e7e9;
+    }
+
+    /* Pagination Controls */
+    .pagination-container {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1rem;
+        background: #fff;
+        border-top: 1px solid #e6e7e9;
+    }
+
+    .editable-cell input {
+        border: none;
+        background: transparent;
+        width: 100%;
+        padding: 4px;
+        text-align: center;
+    }
+
+    .editable-cell input:not([readonly]) {
+        background-color: #fff;
+        box-shadow: inset 0 0 0 1px #dce1e7;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-xl">
+    <!-- Search / Filter -->
+    <div class="card mb-3">
+        <div class="card-body">
+            <div class="row g-2">
+                <div class="col-md-3">
+                    <input type="text" id="f-dept-name" class="form-control" placeholder="部门名称 (支持模糊搜索)">
+                </div>
+                <div class="col-md-2">
+                    <select id="f-type" class="form-select">
+                        <option value="">全部类型</option>
+                        <option value="院领导">院领导</option>
+                        <option value="正职">正职</option>
+                        <option value="副职">副职</option>
+                        <option value="中心基层领导">中心基层领导</option>
+                        <option value="其他员工">其他员工</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <input type="text" id="f-dept-code" class="form-control" placeholder="部门代码">
+                </div>
+                <div class="col-md-2">
+                    <select id="f-status" class="form-select">
+                        <option value="">全部状态</option>
+                        <option value="是">是 (未提交)</option>
+                        <option value="否">否 (已提交)</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <button class="btn btn-primary w-100" onclick="loadData(1)">
+                        <i class="ti ti-search me-2"></i>查询
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Header -->
+    <div class="row g-2 align-items-center mb-3">
+        <div class="col">
+            <h2 class="page-title">账号生成</h2>
+            <div class="text-muted mt-1">共 <span id="total-count">0</span> 个账号 <span id="status-badge"
+                    class="badge bg-green-lt ms-2">查看模式</span></div>
+        </div>
+        <div class="col-auto ms-auto d-print-none">
+            <div class="btn-list">
+                <button class="btn btn-primary" onclick="generateAccounts()">
+                    <i class="ti ti-wand me-2"></i>一键生成
+                </button>
+                <button class="btn btn-ghost-danger" onclick="clearAccounts()">
+                    <i class="ti ti-trash me-2"></i>一键清空
+                </button>
+                <div class="vr mx-2"></div>
+                <button class="btn btn-white" onclick="exportData()">
+                    <i class="ti ti-download me-2"></i>导出Excel
+                </button>
+                <button id="btn-edit" class="btn btn-primary" onclick="toggleEditMode(true)">
+                    <i class="ti ti-pencil me-2"></i>编辑
+                </button>
+                <div id="action-group" style="display: none;">
+                    <button class="btn btn-ghost-danger me-2" onclick="cancelEdit()">取消</button>
+                    <button class="btn btn-primary" onclick="saveData()">保存</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Table -->
+    <div class="card">
+        <div class="table-responsive">
+            <table class="table table-vcenter table-bordered card-table table-striped" id="dataTable">
+                <thead>
+                    <tr>
+                        <th class="w-1">ID</th>
+                        <th>部门名称</th>
+                        <th>部门代码</th>
+                        <th>账号类型</th>
+                        <th>账号</th>
+                        <th class="w-25">密码</th>
+                        <th class="w-15">账号状态</th>
+                    </tr>
+                </thead>
+                <tbody id="table-body">
+                    <!-- Loaded via JS -->
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pagination -->
+        <div class="pagination-container">
+            <div class="d-flex align-items-center gap-2">
+                <span>每页显示</span>
+                <select class="form-select form-select-sm" style="width: 70px;" id="limit-select"
+                    onchange="changeLimit()">
+                    <option value="30" selected>30</option>
+                    <option value="50">50</option>
+                    <option value="100">100</option>
+                </select>
+            </div>
+            <ul class="pagination m-0" id="pagination">
+                <!-- JS generated -->
+            </ul>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block script_extra %}
+<script>
+    let currentPage = 1;
+    let currentLimit = 30;
+    let isEditing = false;
+    let cachedData = []; // Store current page data for edit reference
+
+    document.addEventListener('DOMContentLoaded', () => loadData());
+
+    async function loadData(page = 1) {
+        currentPage = page;
+        const limit = document.getElementById('limit-select').value;
+        currentLimit = limit;
+
+        // Params
+        const deptName = document.getElementById('f-dept-name').value;
+        const type = document.getElementById('f-type').value;
+        const code = document.getElementById('f-dept-code').value;
+        const status = document.getElementById('f-status').value;
+
+        const qs = new URLSearchParams({
+            page, limit,
+            dept_name: deptName,
+            account_type: type,
+            dept_code: code,
+            status: status
+        }).toString();
+
+        document.querySelector('.table-responsive').style.opacity = '0.5';
+        try {
+            const res = await (await fetch(`/api/account/list?${qs}`)).json();
+            renderTable(res.data);
+            renderPagination(res.count, limit, page);
+            document.getElementById('total-count').innerText = res.count;
+            cachedData = res.data;
+        } catch (e) {
+            console.error(e);
+        } finally {
+            document.querySelector('.table-responsive').style.opacity = '1';
+            toggleEditMode(false); // Always reset edit mode on reload
+        }
+    }
+
+    function renderTable(data) {
+        const tbody = document.getElementById('table-body');
+        if (!data || data.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" class="text-center py-5 text-muted">暂无账号或无匹配项</td></tr>';
+            return;
+        }
+        tbody.innerHTML = data.map(item => `
+            <tr data-id="${item.id}">
+                <td>${item.id}</td>
+                <td>${item.dept_name}</td>
+                <td>${item.dept_code}</td>
+                <td>${item.account_type}</td>
+                <td class="fw-bold text-azure">${item.username}</td>
+                <td class="editable-cell">
+                    <input type="text" name="password" value="${item.password}" readonly>
+                </td>
+                <td class="editable-cell">
+                    <select name="status" class="form-select form-select-sm" disabled style="border:none;background:transparent;text-align:center;-webkit-appearance:none;pointer-events:none;">
+                        <option value="是" ${item.status === '是' ? 'selected' : ''}>是</option>
+                        <option value="否" ${item.status === '否' ? 'selected' : ''}>否</option>
+                    </select>
+                </td>
+            </tr>
+        `).join('');
+    }
+
+    function renderPagination(total, limit, current) {
+        const pages = Math.ceil(total / limit);
+        const ul = document.getElementById('pagination');
+        ul.innerHTML = '';
+
+        if (pages <= 1) return;
+
+        // Prev
+        ul.innerHTML += `<li class="page-item ${current == 1 ? 'disabled' : ''}"><a class="page-link" href="#" onclick="loadData(${current - 1})">上一页</a></li>`;
+
+        // Simple logic: Show all if small, or generic range
+        // For simplicity, showing adjacent pages
+        for (let i = 1; i <= pages; i++) {
+            if (i === 1 || i === pages || (i >= current - 2 && i <= current + 2)) {
+                ul.innerHTML += `<li class="page-item ${current == i ? 'active' : ''}"><a class="page-link" href="#" onclick="loadData(${i})">${i}</a></li>`;
+            } else if (i === current - 3 || i === current + 3) {
+                ul.innerHTML += `<li class="page-item disabled"><a class="page-link">...</a></li>`;
+            }
+        }
+
+        // Next
+        ul.innerHTML += `<li class="page-item ${current == pages ? 'disabled' : ''}"><a class="page-link" href="#" onclick="loadData(${current + 1})">下一页</a></li>`;
+    }
+
+    function changeLimit() {
+        loadData(1);
+    }
+
+    async function generateAccounts() {
+        if (!confirm('确定根据部门配置生成账号吗？(不会覆盖已存在的账号)')) return;
+        try {
+            const res = await (await fetch('/api/account/generate', { method: 'POST' })).json();
+            alert(res.msg);
+            loadData(1);
+        } catch (e) { alert('请求失败: ' + e); }
+    }
+
+    async function clearAccounts() {
+        if (!confirm('警告：确定清空所有生成的账号吗？此操作无法撤销！')) return;
+        try {
+            const res = await (await fetch('/api/account/clear', { method: 'POST' })).json();
+            alert(res.msg);
+            loadData(1);
+        } catch (e) { alert('请求失败: ' + e); }
+    }
+
+    function exportData() {
+        window.location.href = '/api/account/export';
+    }
+
+    function toggleEditMode(edit) {
+        isEditing = edit;
+        document.querySelectorAll('#dataTable input').forEach(el => el.readOnly = !edit);
+        document.querySelectorAll('#dataTable select[name="status"]').forEach(el => {
+            el.disabled = !edit;
+            el.style.pointerEvents = edit ? 'auto' : 'none';
+            el.style.webkitAppearance = edit ? 'menulist' : 'none';
+            el.style.backgroundColor = edit ? '#fff' : 'transparent';
+        });
+
+        document.getElementById('btn-edit').style.display = edit ? 'none' : 'inline-block';
+        document.getElementById('action-group').style.display = edit ? 'inline-block' : 'none';
+
+        const badge = document.getElementById('status-badge');
+        badge.innerText = edit ? '编辑中' : '查看模式';
+        badge.className = edit ? 'badge bg-orange-lt ms-2' : 'badge bg-green-lt ms-2';
+    }
+
+    function cancelEdit() {
+        if (confirm('取消将丢失修改，确定吗？')) {
+            loadData(currentPage); // Reload to reset
+            toggleEditMode(false);
+        }
+    }
+
+    async function saveData() {
+        const rows = document.querySelectorAll('#dataTable tbody tr');
+        const updates = [];
+
+        rows.forEach(tr => {
+            const id = tr.getAttribute('data-id');
+            if (!id) return;
+            const password = tr.querySelector('input[name="password"]').value;
+            const status = tr.querySelector('input[name="status"]').value;
+
+            // Should optimize to only send changed, but sending all visible is safer/simpler for now
+            updates.push({ id, password, status });
+        });
+
+        try {
+            const res = await (await fetch('/api/account/save', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ data: updates })
+            })).json();
+            alert(res.msg);
+            if (res.success) {
+                toggleEditMode(false);
+                loadData(currentPage);
+            }
+        } catch (e) { alert('保存失败: ' + e); }
+    }
+</script>
+{% endblock %}

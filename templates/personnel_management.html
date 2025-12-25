@@ -179,7 +179,8 @@
                         <td class="editable-cell">
                             <select name="role" disabled>
                                 <option value=""></option>
-                                {% set roles = ['院长助理', '中心正职', '中心副职', '中心基层领导', '机关正职', '机关副职', '研究所正职', '研究所副职'] %}
+                                {% set roles = ['院长助理', '中心正职', '中心副职', '中心基层领导', '职能部门正职', '职能部门副职', '研究所正职', '研究所副职']
+                                %}
                                 {% for r in roles %}
                                 <option value="{{ r }}" {% if m.role==r %}selected{% endif %}>{{ r }}</option>
                                 {% endfor %}
@@ -339,8 +340,8 @@
                     <option value="中心正职">中心正职</option>
                     <option value="中心副职">中心副职</option>
                     <option value="中心基层领导">中心基层领导</option>
-                    <option value="机关正职">机关正职</option>
-                    <option value="机关副职">机关副职</option>
+                    <option value="职能部门正职">职能部门正职</option>
+                    <option value="职能部门副职">职能部门副职</option>
                     <option value="研究所正职">研究所正职</option>
                     <option value="研究所副职">研究所副职</option>
                 </select>

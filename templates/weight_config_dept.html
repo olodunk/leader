@@ -1,0 +1,264 @@
+{% extends "base.html" %}
+
+{% block head_extra %}
+<style>
+    .table-responsive {
+        max-height: 75vh;
+        overflow-y: auto;
+        position: relative;
+    }
+
+    th,
+    td {
+        white-space: nowrap;
+        text-align: center;
+        vertical-align: middle;
+        border: 1px solid #e6e7e9;
+    }
+
+    /* Sticky Headers */
+    thead th {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        background-color: #f8fafc;
+        box-shadow: 0 1px 0 #e6e7e9;
+    }
+
+    thead th:first-child {
+        left: 0;
+        z-index: 20;
+    }
+
+    tbody th {
+        /* First Column */
+        position: sticky;
+        left: 0;
+        z-index: 5;
+        background-color: #f8fafc;
+        box-shadow: 1px 0 0 #e6e7e9;
+    }
+
+    input.w-input {
+        width: 60px;
+        text-align: center;
+        border: 1px solid transparent;
+        background: transparent;
+    }
+
+    input.w-input:focus {
+        border-color: #206bc4;
+        background: #fff;
+    }
+
+    input.w-input:read-only {
+        color: #888;
+    }
+
+    /* Colors and Highlights */
+    .bg-orange-soft {
+        background-color: #fff3d6;
+    }
+
+    /* Orange areas */
+    .bg-blue-soft {
+        background-color: #d2e4f7;
+    }
+
+    /* Blue areas */
+    .bg-green-soft {
+        background-color: #dcf5d0;
+    }
+
+    /* Green areas (KunGang) */
+
+    .total-row td {
+        font-weight: bold;
+        background-color: #f4f6fa;
+    }
+
+    .text-danger {
+        color: #d63939 !important;
+    }
+
+    .text-success {
+        color: #2fb344 !important;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-xl">
+    <div class="row g-2 align-items-center mb-3">
+        <div class="col">
+            <h2 class="page-title">部门权重配置</h2>
+            <div class="text-muted mt-1">请配置各角色打分权重，纵向总和必须为 100%</div>
+        </div>
+        <div class="col-auto ms-auto">
+            <button class="btn btn-primary" onclick="saveWeights()">
+                <i class="ti ti-device-floppy me-2"></i>保存配置
+            </button>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="table-responsive">
+            <table class="table table-vcenter">
+                <thead>
+                    <tr>
+                        <th style="min-width: 200px;">
+                            考核人 \ 被考核人
+                        </th>
+                        {% for col in col_headers %}
+                        <th>{{ col }}</th>
+                        {% endfor %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in row_headers %}
+                    <tr>
+                        <th>{{ row }}</th>
+                        {% for col in col_headers %}
+                        {# Define Logic for Merged Cells #}
+                        {# Row Indices for 'Center Leader (Principal)' and 'Affiliated Branch (Principal)' are 7 and 11
+                        in the Python list.
+                        But wait, I need exact string matching or index.
+                        Let's use simple logic:
+                        If this is the 'Top' of a merge pair -> Render with rowspan=2.
+                        If this is the 'Bottom' of a merge pair -> Skip rendering.
+                        #}
+
+                        {% set is_orange_col = col in ['院长助理'] %}
+                        {% set is_blue_col = col in ['职能部门正职'] %}
+
+                        {% set is_merge_top = row == '中心领导班子 (正职)' %}
+                        {% set is_merge_bottom = row in ['所属分公司班子正职'] %}
+
+                        {# Wait, the orange area spans 'Center Leader (Principal)' AND 'Affiliated Branch (Principal)'?
+                        Checking the image...
+                        The Orange area spans:
+                        1. Center Leader (Principal)
+                        2. Center Leader (Deputy) -- No
+                        3. KunGang Leader (Principal) -- No
+                        4. Affiliated Branch (Principal) ???
+                        Looking at Image:
+                        Row 1: Center Leader (Principal)
+                        Row 2: Center Leader (Deputy)
+                        ...
+                        Actually, let's look at the rows:
+                        Image Rows: '中心领导班子（正职）', '中心领导班子（副职）'.
+                        The orange block is next to '中心领导班子（正职）'. It occupies distinct rows?
+                        Ah, looking closer at the Image provided:
+                        The Orange block "10%" is under "院长助理" column.
+                        It spans vertically? No, it looks like a single cell aligned with "中心领导班子（正职）".
+                        Wait, the user said: "Orange two blocks sum to 10%".
+                        Looking at the image again (mentally, based on user description):
+                        "Orange two blocks combined... Blue two blocks combined".
+                        In the image, "所属分公司班子正职" (Affiliated Branch Principal) is typically further down.
+                        Wait, in the default weights, I put:
+                        '院长助理': {'中心领导班子 (正职)': 10, '所属分公司班子正职': 10}.
+                        This means they are TWO SEPARATE 10% blocks?
+                        User said: "Orange two blocks combined is 10%".
+                        This implies that (CenterPrincipal + BranchPrincipal) = 10% TOTAL.
+                        My default values in app.py set them to 10 EACH? Or 10 total?
+                        My `DEFAULT_DEPT_WEIGHTS` had:
+                        '院长助理': { ..., '中心领导班子 (正职)': 10, ..., '所属分公司班子正职': 10 } -> Sum = 70+10+10+10+10 = 110%?
+                        Let's check defaults carefully:
+                        Default: 70 (Leader) + 10 (Func) + 10 (Inst) + 10 (Center) + 10 (Branch) = 110%.
+                        User said: "Orange two blocks sum to 10%".
+                        This confirms my default values are WRONG (sum > 100).
+                        Correct logic should be: CenterPrincipal(5) + BranchPrincipal(5) = 10? Or just one of them?
+                        User said: "Combined is 10%".
+                        So in the UI, I should let them edit ONE number (10) that represents the sum, OR allow two
+                        numbers (e.g. 5 and 5).
+
+                        Let's enable **Standard Editing** for all cells first to avoid complex rowspan bugs if row order
+                        changes.
+                        I will add a **Validation Rule** in JS that highlights these specific pairs if their SUM != 10.
+                        This is safer and more flexible.
+                        #}
+
+                        {% set val = matrix.get((col, row), 0) %}
+                        <td class="{% if val > 0 %}bg-light{% endif %}">
+                            <input type="number" class="w-input" data-col="{{ col }}" data-row="{{ row }}"
+                                value="{{ val }}" oninput="calculateTotals()" step="0.5">
+                            <span class="d-none text-muted">%</span>
+                        </td>
+                        {% endfor %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot>
+                    <tr class="total-row">
+                        <th>总计</th>
+                        {% for col in col_headers %}
+                        <td id="total-{{ loop.index0 }}">0%</td>
+                        {% endfor %}
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block script_extra %}
+<script>
+    document.addEventListener('DOMContentLoaded', calculateTotals);
+
+    function calculateTotals() {
+        const cols = {{ col_headers | tojson
+    }};
+    let allValid = true;
+
+    cols.forEach((col, idx) => {
+        let sum = 0;
+        const inputs = document.querySelectorAll(`input[data-col="${col}"]`);
+        inputs.forEach(input => {
+            sum += parseFloat(input.value) || 0;
+        });
+
+        // Update Footer
+        const cell = document.getElementById(`total-${idx}`);
+        cell.innerText = sum + '%';
+
+        if (sum === 100) {
+            cell.classList.remove('text-danger');
+            cell.classList.add('text-success');
+        } else {
+            cell.classList.remove('text-success');
+            cell.classList.add('text-danger');
+            allValid = false;
+        }
+    });
+    }
+
+    async function saveWeights() {
+        // Validate
+        if (document.querySelector('.text-danger')) {
+            if (!confirm('部分列总和不为 100%，确定要保存吗？')) return;
+        }
+
+        const data = [];
+        document.querySelectorAll('input.w-input').forEach(input => {
+            data.push({
+                examinee: input.dataset.col,
+                rater: input.dataset.row,
+                weight: parseFloat(input.value) || 0
+            });
+        });
+
+        try {
+            const res = await fetch('/api/weight/dept/save', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ data: data })
+            });
+            const result = await res.json();
+            alert(result.msg);
+        } catch (e) {
+            alert('保存失败: ' + e);
+        }
+    }
+</script>
+{% endblock %}

@@ -182,19 +182,102 @@ def init_db():
     ''')
 
     # --------------------------------------------------------
+    # 表 8: 测评账号表 (evaluation_accounts)
+    # --------------------------------------------------------
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS evaluation_accounts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            dept_name TEXT NOT NULL,    -- 部门名称
+            dept_code TEXT NOT NULL,    -- 部门代码
+            account_type TEXT,          -- 账号类型 (院领导/正职/副职/中心基层/其他)
+            username TEXT NOT NULL UNIQUE, -- 账号 (A0L001)
+            password TEXT NOT NULL,     -- 密码 (明文显示)
+            status TEXT DEFAULT '是',   -- 账号状态 ("是"=未提交, "否"=已提交)
+            
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_account_username ON evaluation_accounts(username);')
+
+    # --------------------------------------------------------
+    # 表 9: 部门权重配置表 (weight_config_dept)
+    # --------------------------------------------------------
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS weight_config_dept (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            examinee_role TEXT NOT NULL,  -- 被考核人角色 (列头)
+            rater_role TEXT NOT NULL,     -- 考核人角色 (行头)
+            weight REAL DEFAULT 0,        -- 权重 (百分比, e.g. 10.0)
+            
+            UNIQUE(examinee_role, rater_role),
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+
+    # --------------------------------------------------------
     # 预置数据
     # --------------------------------------------------------
     # 检查是否已有管理员
     cursor.execute('SELECT count(*) FROM sys_users WHERE username = ?', ('admin',))
     if cursor.fetchone()[0] == 0:
-        default_pw = encrypt_password('admin888') 
+        default_pw = encrypt_password('admin123') 
         cursor.execute('INSERT INTO sys_users (username, password) VALUES (?, ?)', ('admin', default_pw))
-        print("已创建默认管理员账号: admin / admin888")
+        print("已创建默认管理员账号: admin / admin123")
+
+    # --------------------------------------------------------
+    # 自动 Schema 升级 (Migration) Logic
+    # --------------------------------------------------------
+    upgrade_schema(cursor)
 
     conn.commit()
     conn.close()
-    print("数据库初始化完成! 所有表已就绪。")
+    print("数据库初始化/升级完成!")
+
+def upgrade_schema(cursor):
+    """检测并补全缺失的列 (解决新增功能需删库的问题)"""
+    print("正在检查数据库结构更新...")
+    
+    # helper to check column existence
+    def column_exists(table, col_name):
+        res = cursor.execute(f"PRAGMA table_info({table})").fetchall()
+        for col in res:
+            if col[1] == col_name: return True
+        return False
+
+    def add_column(table, col_def):
+        col_name = col_def.split()[0]
+        if not column_exists(table, col_name):
+            print(f"  -> 表 {table} 缺少列 {col_name}，正在添加...")
+            try:
+                cursor.execute(f"ALTER TABLE {table} ADD COLUMN {col_def}")
+            except Exception as e:
+                print(f"     更新失败: {e}")
+
+    # 1. department_config 表新增的账号计数列
+    dept_cols = [
+        "count_college_leader INTEGER DEFAULT 0",
+        "count_principal INTEGER DEFAULT 0",
+        "count_deputy INTEGER DEFAULT 0",
+        "count_other INTEGER DEFAULT 0",
+        "count_center_leader INTEGER DEFAULT 0",
+        "count_excellent INTEGER DEFAULT 0",
+        "count_recommend_principal INTEGER DEFAULT 0",
+        "count_recommend_deputy INTEGER DEFAULT 0"
+    ]
+    for col in dept_cols:
+        add_column('department_config', col)
+    
+    # 2. middle_managers 表新增列
+    mgr_cols = [
+        "dept_code TEXT",
+        "tenure_time TEXT",
+        "is_newly_promoted TEXT"
+    ]
+    for col in mgr_cols:
+        add_column('middle_managers', col)
+        
+    print("数据库结构检查完毕。")
 
 if __name__ == '__main__':
-    # if os.path.exists(DATABASE): os.remove(DATABASE) # Uncomment to reset
     init_db()
