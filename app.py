@@ -120,7 +120,7 @@ def encrypt_password(password):
 def admin_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        if session.get('role') != 'admin':
+        if session.get('admin_role') != 'admin': # Changed key
             return redirect(url_for('admin_login'))
         return f(*args, **kwargs)
     return decorated_function
@@ -128,7 +128,7 @@ def admin_required(f):
 def assessment_login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        if 'user_id' not in session: # Assessor logged in
+        if session.get('assessor_role') != 'assessor': # Changed key
              return redirect(url_for('index'))
         return f(*args, **kwargs)
     return decorated_function
@@ -146,26 +146,59 @@ def login_api():
         user = db.execute('SELECT * FROM sys_users WHERE username = ?', (username,)).fetchone()
         if user and user['password'] == encrypt_password(password):
             session.permanent = True  # Enable timeout
-            session['role'] = 'admin'
-            session['user_id'] = user['id']
+            # Namespace: Admin
+            session['admin_role'] = 'admin'
+            session['admin_user_id'] = user['id']
             return jsonify({'success': True, 'redirect': url_for('admin_dashboard')})
         return jsonify({'success': False, 'msg': '管理员账号或密码错误'})
         
     else: # assessment
         # Check evaluation_accounts (plain password as per plan/requirements)
-        user = db.execute('SELECT * FROM evaluation_accounts WHERE username = ?', (username,)).fetchone()
+        # Fetch Dept Info by joining or separate query
+        # Since evaluation_accounts has dept_code, we can join or query again.
+        # Let's do a join to get dept_type and dept_name immediately.
+        sql = '''
+            SELECT a.*, d.dept_type 
+            FROM evaluation_accounts a 
+            LEFT JOIN department_config d ON a.dept_code = d.dept_code 
+            WHERE a.username = ?
+        '''
+        user = db.execute(sql, (username,)).fetchone()
+        
         if user and user['password'] == password:
              session.permanent = True  # Enable timeout
-             session['role'] = 'assessor'
-             session['user_id'] = user['id']
-             session['username'] = user['username']
+             # Namespace: Assessor
+             session['assessor_role'] = 'assessor'
+             session['assessor_user_id'] = user['id']
+             session['assessor_username'] = user['username']
+             session['assessor_dept_name'] = user['dept_name']
+             session['assessor_dept_type'] = user['dept_type']
+             
              return jsonify({'success': True, 'redirect': url_for('assessment_home')})
         return jsonify({'success': False, 'msg': '测评账号或密码错误'})
 
 @app.route('/api/logout')
 def logout():
-    session.clear()
-    return redirect(url_for('admin_login')) # Or index based on where they came from? User said "Click safe exit -> Admin Login"
+    logout_type = request.args.get('type') # 'admin' or 'assessment'
+    
+    if logout_type == 'admin':
+        session.pop('admin_role', None)
+        session.pop('admin_user_id', None)
+        return redirect(url_for('admin_login'))
+        
+    elif logout_type == 'assessment':
+        session.pop('assessor_role', None)
+        session.pop('assessor_user_id', None)
+        session.pop('assessor_username', None)
+        session.pop('assessor_dept_name', None)
+        session.pop('assessor_dept_type', None)
+        return redirect(url_for('index'))
+        
+    else:
+        # Fallback: Clear all? Or just redirect?
+        # Maybe user manually hit /api/logout
+        session.clear()
+        return redirect(url_for('index'))
 
 # ==========================================
 # 4. 页面路由 (View Routes)
@@ -174,24 +207,54 @@ def logout():
 @app.route('/')
 def index():
     """测评登录页 (Root)"""
-    if session.get('role') == 'assessor':
+    if session.get('assessor_role') == 'assessor':
         return redirect(url_for('assessment_home'))
     return render_template('login_assessment.html')
 
 @app.route('/assessment/home')
 def assessment_home():
-    """测评打分首页 (待完善)"""
-    # Simply check session
-    if session.get('role') != 'assessor':
+    """测评打分首页"""
+    if session.get('assessor_role') != 'assessor':
         return redirect(url_for('index'))
     return render_template('assessment_home.html')
+
+@app.route('/assessment/team-evaluation')
+def assessment_team():
+    """领导班子综合考核评价"""
+    if session.get('assessor_role') != 'assessor':
+        return redirect(url_for('index'))
+        
+    # Access Control: Exclude '院领导'
+    if session.get('assessor_dept_type') == '院领导':
+        return "您的账号无权访问此页面", 403
+
+    # Fetch existing scores if any
+    db = get_db()
+    rater_account = session.get('assessor_username')
+    
+    # We need target_dept_code to look up. 
+    # Fetch it from evaluation_accounts associated with this user.
+    user_row = db.execute('SELECT dept_code, dept_name FROM evaluation_accounts WHERE username=?', (rater_account,)).fetchone()
+    
+    existing_scores = None
+    if user_row:
+        target_dept_code = user_row['dept_code']
+        # Query team_scores
+        row = db.execute('SELECT * FROM team_scores WHERE rater_account = ? AND target_dept_code = ? ORDER BY id DESC LIMIT 1', 
+                         (rater_account, target_dept_code)).fetchone()
+        if row:
+            existing_scores = dict(row)
+
+    return render_template('assessment_team.html', existing_scores=existing_scores)
 
 @app.route('/admin/login')
 def admin_login():
     """管理员登录页"""
-    if session.get('role') == 'admin':
+    if session.get('admin_role') == 'admin':
         return redirect(url_for('admin_dashboard'))
     return render_template('login_admin.html')
+    
+
 
 @app.route('/admin/dashboard')
 @admin_required
@@ -821,6 +884,78 @@ COL_HEADERS = [
     '昆冈班子副职 (北京)', '所属分公司 (兰州、抚顺) 班子正职', '所属分公司 (兰州、抚顺) 班子副职'
 ]
 
+# ==========================================
+# 映射配置：打分角色 (Rater Role) -> 账号规则
+# 逻辑：Role -> [Rule1, Rule2, ...] (Satisfy ANY rule)
+# ==========================================
+RATER_RULES = {
+    # 1. 院领导
+    '院领导': [
+        {'dept_names': ['院领导'], 'types': ['L']}
+    ],
+    
+    # 2. 职能部门正职 (含院长助理)
+    '职能部门正职 (含院长助理)': [
+        {'dept_type': '职能部门', 'types': ['P']},
+        {'dept_names': ['院长助理'], 'types': []} # Empty list = Allow all types (L, P, etc.)
+    ],
+    
+    # 3. 职能部门副职
+    '职能部门副职': [
+        {'dept_type': '职能部门', 'types': ['D']}
+    ],
+    
+    # 4. 本部门其他员工 (动态逻辑，此处保持空或占位)
+    '本部门其他员工': [],
+    
+    # 5-7. 研究所
+    '研究所正职': [{'dept_type': '研究所', 'types': ['P']}],
+    '研究所副职': [{'dept_type': '研究所', 'types': ['D']}],
+    '研究所其他员工': [{'dept_type': '研究所', 'types': ['E']}],
+    
+    # 8-11. 两中心 (兰州、大庆)
+    '中心领导班子 (正职)': [
+        {'dept_names': ['兰州化工研究中心', '大庆化工研究中心'], 'types': ['P']}
+    ],
+    '中心领导班子 (副职)': [
+        {'dept_names': ['兰州化工研究中心', '大庆化工研究中心'], 'types': ['D']}
+    ],
+    '职工代表中基层领导人员 (两中心)': [
+        {'dept_names': ['兰州化工研究中心', '大庆化工研究中心'], 'types': ['C']}
+    ],
+    '其他职工代表 (两中心)': [
+        {'dept_names': ['兰州化工研究中心', '大庆化工研究中心'], 'types': ['E']}
+    ],
+
+    # 12-15. 昆冈 (兰州、抚顺)
+    '昆冈班子正职': [
+        {'dept_names': ['昆冈兰州分公司', '昆冈抚顺分公司'], 'types': ['P']}
+    ],
+    '昆冈班子副职': [
+        {'dept_names': ['昆冈兰州分公司', '昆冈抚顺分公司'], 'types': ['D']}
+    ],
+    '职工代表中基层领导人员 (昆冈北京)': [
+        {'dept_names': ['昆冈兰州分公司', '昆冈抚顺分公司'], 'types': ['C']}
+    ],
+    '其他职工代表 (昆冈北京)': [
+        {'dept_names': ['昆冈兰州分公司', '昆冈抚顺分公司'], 'types': ['E']}
+    ],
+    
+    # 16-19. 分公司 (兰州、抚顺) - 指向相同部门
+    '所属分公司班子正职': [
+        {'dept_names': ['昆冈兰州分公司', '昆冈抚顺分公司'], 'types': ['P']}
+    ],
+    '所属分公司班子副职': [
+        {'dept_names': ['昆冈兰州分公司', '昆冈抚顺分公司'], 'types': ['D']}
+    ],
+    '职工代表中基层领导人员 (分公司)': [
+        {'dept_names': ['昆冈兰州分公司', '昆冈抚顺分公司'], 'types': ['C']}
+    ],
+    '其他职工代表 (分公司)': [
+        {'dept_names': ['昆冈兰州分公司', '昆冈抚顺分公司'], 'types': ['E']}
+    ],
+}
+
 def init_dept_weights(db):
     """初始化部门权重配置"""
     try:
@@ -851,6 +986,86 @@ def init_dept_weights(db):
     except Exception as e:
         print(f"Init Weights Failed: {e}")
 
+def get_user_rater_roles(user_account, user_dept_info):
+    """
+    根据账号信息和部门信息，匹配其对应的打分人角色
+    输入:
+        user_account: dict, from session (e.g. {'account_type': 'P', ...})
+        user_dept_info: dict, from DB (e.g. {'dept_name': '院长助理', 'dept_type': '职能部门'})
+    输出:
+        list of str: 该账号拥有的所有 Rater Roles (e.g. ['职能部门正职'])
+    """
+    matched_roles = []
+    
+    # 获取账号类型 (L/P/D/C/E)
+    acc_type = user_account.get('account_type', '')
+    
+    for rater_role, rules_list in RATER_RULES.items():
+        # 遍历该角色的所有规则，只要满足其中一条即可
+        role_matched = False
+        
+        # 特殊处理：本部门其他员工 (需要动态对比被打分人ID，此处仅作静态角色标识，具体在算分逻辑中处理)
+        if rater_role == '本部门其他员工':
+             # E类账号才有可能是本部门其他员工
+             if acc_type == 'E':
+                 matched_roles.append(rater_role)
+             continue
+
+        for rule in rules_list:
+            # 1. Check Types (if verified list is not empty)
+            # Empty list means "Allow All Types"
+            if rule['types'] and acc_type not in rule['types']:
+                continue
+                
+            # 2. Check Dept (Name or Type)
+            match_dept = False
+            
+            # A. Name Match Priority
+            if 'dept_names' in rule:
+                if user_dept_info.get('dept_name') in rule['dept_names']:
+                    match_dept = True
+            
+            # B. Type Match
+            elif 'dept_type' in rule:
+                if user_dept_info.get('dept_type') == rule['dept_type']:
+                    match_dept = True
+                    
+            if match_dept:
+                role_matched = True
+                break # 满足一条规则即可
+        
+        if role_matched:
+            matched_roles.append(rater_role)
+            
+    return matched_roles
+
+
+def get_examinee_role_key(person_role, dept_name):
+    """
+    根据中层人员的“角色”和“部门”，识别其对应的权重表列头 (Column Header)
+    """
+    # 1. 直接匹配基础角色
+    if person_role in ['院长助理', '职能部门正职', '职能部门副职', '研究所正职', '研究所副职']:
+        return person_role
+        
+    # 2. 复合角色：两中心 (兰州/大庆)
+    if '中心' in person_role: # 中心正职 / 中心副职
+        if dept_name in ['兰州化工研究中心', '大庆化工研究中心']:
+            if '正职' in person_role: return '两中心正职'
+            if '副职' in person_role: return '两中心副职'
+            
+        # 3. 复合角色：昆冈 (北京)
+        if dept_name == '昆冈公司':
+            if '副职' in person_role: return '昆冈班子副职 (北京)'
+            
+        # 4. 复合角色：分公司 (兰州/抚顺)
+        # 注意：这里包括 “昆冈兰州分公司” 和 “昆冈抚顺分公司”
+        if dept_name in ['昆冈兰州分公司', '昆冈抚顺分公司']:
+            if '正职' in person_role: return '所属分公司 (兰州、抚顺) 班子正职'
+            if '副职' in person_role: return '所属分公司 (兰州、抚顺) 班子副职'
+            
+    return None
+
 @app.route('/weight/department')
 @admin_required
 def weight_config_dept():
@@ -878,13 +1093,324 @@ def save_weight_dept():
     db = get_db()
     try:
         updates = []
+        # Temporary dict to enforce consistency before saving
+        # Key: (Examinee, Rater) -> Weight
+        pending_changes = {}
+        
         for item in req.get('data', []):
-            updates.append((item['weight'], item['examinee'], item['rater']))
+            pending_changes[(item['examinee'], item['rater'])] = float(item['weight'])
+            
+        # ---------------------------------------------------------
+        # 特殊权重逻辑校验 (Special Weight Logic)
+        # 场景：职能部门正职考被核时，中心正职 与 分公司正职 权重需保持一致
+        # ---------------------------------------------------------
+        target_col = '职能部门正职 (含院长助理)' # Wait, Header name is '职能部门正职 (含院长助理)' ?? No, Examinee Header is '职能部门正职' (Column)
+        # Check COL_HEADERS definition: '职能部门正职'
+        
+        # Define the shared group: (Column, [Row1, Row2])
+        # Column: '职能部门正职' (Examinee)
+        # Rows: '中心领导班子 (正职)', '所属分公司班子正职'
+        
+        shared_col = '职能部门正职'
+        row_a = '中心领导班子 (正职)'
+        row_b = '所属分公司班子正职'
+        
+        if (shared_col, row_a) in pending_changes and (shared_col, row_b) in pending_changes:
+             val_a = pending_changes[(shared_col, row_a)]
+             val_b = pending_changes[(shared_col, row_b)]
+             
+             # If mismatch, force them to be the same? Or error?
+             # Strategy: Use the value from the UI (assuming UI binds them). 
+             # But if malicious/buggy, just force consistency (e.g. use A).
+             if val_a != val_b:
+                 # Warning: inconsistency detected, syncing B to A
+                 pending_changes[(shared_col, row_b)] = val_a
+                 
+        # Convert back to list for DB update
+        for (exam, rater), weight in pending_changes.items():
+            updates.append((weight, exam, rater))
             
         db.executemany('UPDATE weight_config_dept SET weight = ? WHERE examinee_role = ? AND rater_role = ?', updates)
         db.commit()
         return jsonify({'success': True, 'msg': '保存成功'})
     except Exception as e:
+        return jsonify({'success': False, 'msg': str(e)})
+
+# ==========================================
+# 10. API: 部门权重配置
+# ==========================================
+
+# ... (Previous Code)
+
+# ==========================================
+# 11. API: 领导班子打分提交 (New)
+# ==========================================
+
+TEAM_SCORE_WEIGHTS = {
+    's_political_resp': 10,
+    's_social_resp': 5,
+    's_manage_benefit': 10,
+    's_manage_effic': 10,
+    's_risk_control': 10,
+    's_tech_innov': 10,
+    's_deep_reform': 10,
+    's_talent_strength': 10,
+    's_party_build': 7.5,
+    's_party_conduct': 7.5,
+    's_unity': 5,
+    's_mass_ties': 5
+}
+
+@app.route('/api/assessment/team/submit', methods=['POST'])
+def submit_team_score():
+    if session.get('assessor_role') != 'assessor':
+        return jsonify({'success': False, 'msg': '未登录'})
+
+    req = request.json
+    scores_dict = req.get('scores', {})
+    
+    # 1. Backend Validation
+    all_ten = True
+    total_score = 0
+    
+    try:
+        rater_account = session.get('assessor_username')
+        db = get_db()
+        
+        user_row = db.execute('SELECT dept_code FROM evaluation_accounts WHERE username=?', (rater_account,)).fetchone()
+        if not user_row: return jsonify({'success': False, 'msg': '账号异常'})
+        target_dept_code = user_row['dept_code']
+        
+        cols = []
+        vals = []
+        update_clauses = []
+        update_vals = []
+        
+        for key, weight in TEAM_SCORE_WEIGHTS.items():
+            raw_val = float(scores_dict.get(key, 0))
+            
+            # Integer Check
+            if not raw_val.is_integer() or raw_val < 0 or raw_val > 10:
+                return jsonify({'success': False, 'msg': f'分数必须为0-10整数: {key}'})
+                
+            if raw_val != 10: all_ten = False
+            
+            # Calculate Weighted Score
+            weighted_val = raw_val * (weight / 10.0)
+            total_score += weighted_val
+            
+            cols.append(key)
+            vals.append(raw_val)
+            update_clauses.append(f"{key} = ?")
+            update_vals.append(raw_val)
+            
+        if all_ten:
+            return jsonify({'success': False, 'msg': '无效评分：不能全为10分'})
+            
+        # Check if exists
+        exist_row = db.execute('SELECT id FROM team_scores WHERE rater_account=? AND target_dept_code=?', 
+                               (rater_account, target_dept_code)).fetchone()
+        
+        if exist_row:
+            # UPDATE
+            update_clauses.append("total_score = ?")
+            update_vals.append(total_score)
+            update_vals.append(exist_row['id']) # WHERE id = ?
+            
+            sql = f"UPDATE team_scores SET {', '.join(update_clauses)} WHERE id = ?"
+            db.execute(sql, update_vals)
+        else:
+            # INSERT
+            cols += ['rater_account', 'target_dept_code', 'total_score']
+            vals += [rater_account, target_dept_code, total_score]
+            
+            q_marks = ', '.join(['?'] * len(cols))
+            col_names = ', '.join(cols)
+            db.execute(f'INSERT INTO team_scores ({col_names}) VALUES ({q_marks})', vals)
+        
+        # Update Account Status to "Submitted" ("否")
+        db.execute('UPDATE evaluation_accounts SET status = "否" WHERE username = ?', (rater_account,))
+        
+        db.commit()
+        
+        return jsonify({'success': True, 'msg': '提交成功'})
+        
+    except Exception as e:
+        return jsonify({'success': False, 'msg': str(e)})
+
+# ==========================================
+# 12. API: 领导人员综合考核评价 (New)
+# ==========================================
+
+PERSONNEL_WEIGHTS = {
+    's_political_ability': 10,
+    's_political_perf': 10,
+    's_party_build': 10,
+    's_professionalism': 10,
+    's_leadership': 10,
+    's_learning_innov': 10,
+    's_performance': 10,
+    's_responsibility': 10,
+    's_style_image': 10,
+    's_integrity': 10
+}
+
+@app.route('/assessment/personnel-evaluation')
+def assessment_personnel():
+    """领导人员综合考核评价"""
+    if session.get('assessor_role') != 'assessor':
+        return redirect(url_for('index'))
+        
+    rater_account = session.get('assessor_username')
+    db = get_db()
+    
+    # 1. Get Dept Info
+    user_row = db.execute('''
+        SELECT a.dept_code, d.count_excellent, d.dept_name
+        FROM evaluation_accounts a
+        LEFT JOIN department_config d ON a.dept_code = d.dept_code
+        WHERE a.username=?
+    ''', (rater_account,)).fetchone()
+    
+    if not user_row:
+        return "账号信息异常", 403
+        
+    dept_code = user_row['dept_code']
+    count_excellent = user_row['count_excellent'] or 0
+    dept_name = user_row['dept_name']
+    
+    # Requirement: "可被评为优秀人数不为0"
+    if count_excellent <= 0:
+        return render_template('assessment_error.html', msg="该部门无优秀评选名额，无需进行此项考核。")
+
+    # 2. Get Examinees (Principals & Deputies of this Dept)
+    managers = db.execute('SELECT * FROM middle_managers WHERE dept_code=? ORDER BY sort_no ASC', (dept_code,)).fetchall()
+    
+    # 3. Get Existing Scores
+    existing_rows = db.execute('SELECT * FROM personnel_scores WHERE rater_account=? AND target_dept_code=?', 
+                              (rater_account, dept_code)).fetchall()
+    
+    scores_map = {}
+    for r in existing_rows:
+        scores_map[r['examinee_id']] = dict(r)
+        
+    return render_template('assessment_personnel.html', 
+                           managers=managers, 
+                           count_excellent=count_excellent,
+                           scores_map=scores_map,
+                           dept_name=dept_name)
+
+@app.route('/api/assessment/personnel/submit', methods=['POST'])
+def submit_personnel_score():
+    if session.get('assessor_role') != 'assessor':
+        return jsonify({'success': False, 'msg': '未登录'})
+
+    req = request.json
+    scores_list = req.get('data', [])
+    if not scores_list:
+        return jsonify({'success': False, 'msg': '无提交数据'})
+
+    rater_account = session.get('assessor_username')
+    db = get_db()
+    
+    # Verify Dept & Excellent Count Limit
+    user_row = db.execute('''
+        SELECT a.dept_code, d.count_excellent 
+        FROM evaluation_accounts a
+        LEFT JOIN department_config d ON a.dept_code = d.dept_code
+        WHERE a.username=?
+    ''', (rater_account,)).fetchone()
+    
+    if not user_row: return jsonify({'success': False, 'msg': '账号异常'})
+    
+    dept_code = user_row['dept_code']
+    limit_excellent = user_row['count_excellent'] or 0
+    
+    # ---------------------------
+    # Validation Logic
+    # ---------------------------
+    count_selected_excellent = 0
+    
+    for item in scores_list:
+        name = item.get('name', '某人')
+        pid = item.get('id')
+        grade = item.get('grade') # 优秀/称职/基本称职/不称职
+        
+        # Count Excellent
+        if grade == '优秀':
+            count_selected_excellent += 1
+            
+        # Check Scores
+        scores = item.get('scores', {})
+        ten_count = 0
+        all_below_eight = True
+        
+        # We need validation per person
+        for k in PERSONNEL_WEIGHTS.keys():
+            val = float(scores.get(k, 0))
+            if not val.is_integer() or val < 0 or val > 10:
+                return jsonify({'success': False, 'msg': f'{name}: 分数必须为0-10整数'})
+            
+            if val == 10: ten_count += 1
+            if val >= 8: all_below_eight = False
+            
+        # Rule: 称职 -> 10分数量 <= 6
+        if grade == '称职' and ten_count > 6:
+            return jsonify({'success': False, 'msg': f'{name}: 评价为“称职”时，10分项不能超过6个'})
+            
+        # Rule: 基本称职 -> 不能有10分
+        if grade == '基本称职' and ten_count > 0:
+            return jsonify({'success': False, 'msg': f'{name}: 评价为“基本称职”时，不能有10分项'})
+            
+        # Rule: 不称职 -> 全部分数 < 8
+        if grade == '不称职' and not all_below_eight:
+            return jsonify({'success': False, 'msg': f'{name}: 评价为“不称职”时，各项评分需在8分以下'})
+
+    # Excellent Limit Check
+    if count_selected_excellent > limit_excellent:
+        return jsonify({'success': False, 'msg': f'评价为“优秀”的人数不能超过 {limit_excellent} 人 (当前 {count_selected_excellent} 人)'})
+
+    # ---------------------------
+    # Save to DB (UPSERT)
+    # ---------------------------
+    try:
+        cur = db.cursor()
+        for item in scores_list:
+            examinee_id = item.get('id')
+            grade = item.get('grade')
+            scores = item.get('scores', {})
+            
+            # Calculate Total
+            total = 0
+            for k, w in PERSONNEL_WEIGHTS.items():
+                val = float(scores.get(k, 0))
+                total += val * (w / 10.0) 
+                
+            # Check exist
+            exist = cur.execute('SELECT id FROM personnel_scores WHERE rater_account=? AND examinee_id=?', 
+                                (rater_account, examinee_id)).fetchone()
+                                
+            score_cols = list(PERSONNEL_WEIGHTS.keys())
+            score_vals = [float(scores.get(k, 0)) for k in score_cols]
+            
+            if exist:
+                # Update
+                set_clause = ', '.join([f"{k}=?" for k in score_cols])
+                set_clause += ", evaluation_grade=?, total_score=?, updated_at=CURRENT_TIMESTAMP"
+                params = score_vals + [grade, total, exist['id']]
+                cur.execute(f'UPDATE personnel_scores SET {set_clause} WHERE id=?', params)
+            else:
+                # Insert
+                cols = ['rater_account', 'target_dept_code', 'examinee_id', 'examinee_name', 'evaluation_grade', 'total_score'] + score_cols
+                q = ', '.join(['?'] * len(cols))
+                vals = [rater_account, dept_code, examinee_id, item.get('name'), grade, total] + score_vals
+                cur.execute(f'INSERT INTO personnel_scores ({", ".join(cols)}) VALUES ({q})', vals)
+
+        db.commit()
+        return jsonify({'success': True, 'msg': '提交成功'})
+        
+    except Exception as e:
+        db.rollback()
         return jsonify({'success': False, 'msg': str(e)})
 
 if __name__ == '__main__':

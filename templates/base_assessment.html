@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>干部测评打分系统</title>
+
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/tabler.min.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/tabler-icons.min.css') }}">
+
+    <style>
+        :root {
+            --tblr-font-sans-serif: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+        }
+
+        body {
+            font-feature-settings: "cv03", "cv04", "cv11";
+            background-color: #f4f6fa;
+        }
+
+        /* 侧边栏激活样式 */
+        .navbar-vertical .nav-item.active .nav-link {
+            background-color: rgba(32, 107, 196, 0.06);
+            color: #206bc4;
+            font-weight: 600;
+        }
+    </style>
+
+    {% block head_extra %}{% endblock %}
+</head>
+
+<body class="layout-fluid">
+    <div class="page">
+
+        <aside class="navbar navbar-vertical navbar-expand-lg navbar-light">
+            <div class="container-fluid">
+                <button class="navbar-toggler" type="button" data-bs-toggle="collapse"
+                    data-bs-target="#sidebar-menu"><span class="navbar-toggler-icon"></span></button>
+
+                <h1 class="navbar-brand navbar-brand-autodark">
+                    <a href="/assessment/home"
+                        class="text-decoration-none text-primary d-flex align-items-center gap-2">
+                        <i class="ti ti-checklist fs-2"></i><span class="text-dark">测评打分</span>
+                    </a>
+                </h1>
+
+                <div class="collapse navbar-collapse" id="sidebar-menu">
+                    <ul class="navbar-nav pt-lg-3">
+
+                        <li class="nav-item {% if request.endpoint == 'assessment_home' %}active{% endif %}">
+                            <a class="nav-link" href="{{ url_for('assessment_home') }}"><span
+                                    class="nav-link-icon d-md-none d-lg-inline-block"><i
+                                        class="ti ti-home"></i></span><span class="nav-link-title">测评首页</span></a>
+                        </li>
+
+                        <li class="nav-item">
+                            <div class="nav-link disabled text-muted text-uppercase fw-bold mt-2 mb-1">
+                                打分项目
+                            </div>
+                        </li>
+
+                        {# 权限控制：院领导类型账号不显示此菜单 #}
+                        {% if session.get('assessor_dept_type') != '院领导' %}
+                        <li class="nav-item {% if request.endpoint == 'assessment_team' %}active{% endif %}">
+                            <a class="nav-link" href="{{ url_for('assessment_team') }}">
+                                <span class="nav-link-icon d-md-none d-lg-inline-block"><i
+                                        class="ti ti-users"></i></span>
+                                <span class="nav-link-title">领导班子综合考核评价</span>
+                            </a>
+                        </li>
+                        <li class="nav-item {% if request.endpoint == 'assessment_personnel' %}active{% endif %}">
+                            <a class="nav-link" href="{{ url_for('assessment_personnel') }}">
+                                <span class="nav-link-icon d-md-none d-lg-inline-block"><i
+                                        class="ti ti-user-star"></i></span>
+                                <span class="nav-link-title">领导人员综合考核评价</span>
+                            </a>
+                        </li>
+                        {% endif %}
+
+                        {# 后续项目可继续添加 #}
+
+                        <li class="nav-item mt-auto">
+                            <div class="nav-link d-flex flex-column align-items-start py-3">
+                                <div class="text-muted small">当前账号</div>
+                                <div class="fw-bold text-dark">{{ session.get('assessor_username', 'Unknown') }}</div>
+                                <div class="text-muted small mt-1">{{ session.get('assessor_dept_name', '') }}</div>
+                            </div>
+                            <a class="nav-link text-danger border-top pt-3"
+                                href="{{ url_for('logout', type='assessment') }}">
+                                <span class="nav-link-icon d-md-none d-lg-inline-block"><i
+                                        class="ti ti-logout"></i></span>
+                                <span class="nav-link-title">安全退出</span>
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </aside>
+
+        <div class="page-wrapper">
+            <div class="page-body">
+                {% block content %}{% endblock %}
+            </div>
+        </div>
+
+    </div>
+
+    <script src="{{ url_for('static', filename='js/tabler.min.js') }}"></script>
+    {% block script_extra %}{% endblock %}
+</body>
+
+</html>

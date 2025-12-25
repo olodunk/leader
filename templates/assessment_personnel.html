@@ -1,0 +1,347 @@
+{% extends "base_assessment.html" %}
+
+{% block content %}
+<div class="container-fluid px-4">
+    <div class="row g-2 align-items-center mb-3">
+        <div class="col">
+            <h2 class="page-title">领导人员综合考核评价</h2>
+        </div>
+        <div class="col-auto ms-auto">
+            <button class="btn btn-primary" onclick="submitScores()">
+                <i class="ti ti-send me-2"></i>提交评分
+            </button>
+        </div>
+    </div>
+
+    <!-- Dept Info Panel -->
+    <div class="card mb-3">
+        <div class="card-body py-2">
+            <div class="row text-center">
+                <div class="col-6 border-end">
+                    <div class="text-muted small">被考核部门</div>
+                    <div class="fw-bold">{{ dept_name }}</div>
+                </div>
+                <div class="col-6">
+                    <div class="text-muted small">可被评为优秀人数</div>
+                    <div class="fw-bold text-azure fs-3">{{ count_excellent }}</div>
+                    <input type="hidden" id="limit_excellent" value="{{ count_excellent }}">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <style>
+        .vertical-header {
+            writing-mode: vertical-rl;
+            text-orientation: mixed;
+            white-space: nowrap;
+            letter-spacing: 4px;
+            /* Increase spacing for better readability */
+            padding: 10px 5px !important;
+            height: 130px;
+            /* Sufficient height for text */
+            vertical-align: middle;
+        }
+
+        .score-col {
+            width: 45px;
+            min-width: 45px;
+            padding: 0 !important;
+        }
+
+        .score-input {
+            padding: 0 !important;
+            height: 36px;
+            font-size: 15px;
+            border: 1px solid transparent;
+            /* Invisible border by default */
+            background: rgba(0, 0, 0, 0.02);
+            /* Very faint background to show area */
+        }
+
+        .score-input:focus {
+            background: #fff;
+            border: 1px solid #206bc4;
+            box-shadow: none;
+        }
+
+        .grade-col {
+            width: 170px;
+        }
+    </style>
+
+    <div class="card mb-3" style="overflow: visible;">
+        <div class="table-responsive" style="overflow-x: auto;">
+            <table class="table table-bordered table-vcenter text-center align-middle mb-0">
+                <thead>
+                    <tr class="bg-light">
+                        <th rowspan="2" style="width: 40px;">序号</th>
+                        <th rowspan="2" style="width: 70px;">姓名</th>
+                        <th rowspan="2" style="width: 40px;">性别</th>
+                        <th rowspan="2" style="width: 100px;">现职务</th>
+                        <th rowspan="2" class="grade-col">评价等次</th>
+                        <th colspan="3">政治坚强</th>
+                        <th colspan="3">本领高强</th>
+                        <th colspan="4">意志顽强</th>
+                    </tr>
+                    <tr class="bg-white small">
+                        <th class="vertical-header score-col">政治能力</th>
+                        <th class="vertical-header score-col">政治表现</th>
+                        <th class="vertical-header score-col">抓党建强党建</th>
+                        <th class="vertical-header score-col">专业素养</th>
+                        <th class="vertical-header score-col">领导能力</th>
+                        <th class="vertical-header score-col">学习创新</th>
+                        <th class="vertical-header score-col">履职成效</th>
+                        <th class="vertical-header score-col">担当作为</th>
+                        <th class="vertical-header score-col">作风形象</th>
+                        <th class="vertical-header score-col">廉洁从业</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for m in managers %}
+                    {% set score_data = scores_map.get(m.id, {}) %}
+                    {% set grade = score_data.get('evaluation_grade', '') %}
+
+                    <tr class="person-row" data-id="{{ m.id }}" data-name="{{ m.name }}">
+                        <td>{{ loop.index }}</td>
+                        <td>{{ m.name }}</td>
+                        <td>{{ m.gender }}</td>
+                        <td class="text-wrap small" style="max-width: 100px; line-height: 1.2;">{{ m.position }}</td>
+
+                        <!-- Grades -->
+                        <td class="p-1">
+                            <div class="d-grid gap-1 text-start"
+                                style="grid-template-columns: 1fr 1fr; width: 100%; max-width: 160px; margin: 0 auto;">
+                                <label class="form-check m-0 small">
+                                    <input class="form-check-input grade-radio p-1" type="radio" name="grade_{{ m.id }}"
+                                        value="优秀" {% if grade=='优秀' %}checked{% endif %}>
+                                    <span class="form-check-label">优秀</span>
+                                </label>
+                                <label class="form-check m-0 small">
+                                    <input class="form-check-input grade-radio p-1" type="radio" name="grade_{{ m.id }}"
+                                        value="称职" {% if grade=='称职' %}checked{% endif %}>
+                                    <span class="form-check-label">称职</span>
+                                </label>
+                                <label class="form-check m-0 small">
+                                    <input class="form-check-input grade-radio p-1" type="radio" name="grade_{{ m.id }}"
+                                        value="基本称职" {% if grade=='基本称职' %}checked{% endif %}>
+                                    <span class="form-check-label">基本称职</span>
+                                </label>
+                                <label class="form-check m-0 small">
+                                    <input class="form-check-input grade-radio p-1" type="radio" name="grade_{{ m.id }}"
+                                        value="不称职" {% if grade=='不称职' %}checked{% endif %}>
+                                    <span class="form-check-label">不称职</span>
+                                </label>
+                            </div>
+                        </td>
+
+                        <!-- Scores -->
+                        <td class="p-1"><input type="number" class="form-control text-center px-0 score-input"
+                                name="s_political_ability" value="{{ score_data.get('s_political_ability', 10)|int }}"
+                                min="0" max="10"></td>
+                        <td class="p-1"><input type="number" class="form-control text-center px-0 score-input"
+                                name="s_political_perf" value="{{ score_data.get('s_political_perf', 10)|int }}" min="0"
+                                max="10"></td>
+                        <td class="p-1"><input type="number" class="form-control text-center px-0 score-input"
+                                name="s_party_build" value="{{ score_data.get('s_party_build', 10)|int }}" min="0"
+                                max="10"></td>
+                        <td class="p-1"><input type="number" class="form-control text-center px-0 score-input"
+                                name="s_professionalism" value="{{ score_data.get('s_professionalism', 10)|int }}"
+                                min="0" max="10"></td>
+                        <td class="p-1"><input type="number" class="form-control text-center px-0 score-input"
+                                name="s_leadership" value="{{ score_data.get('s_leadership', 10)|int }}" min="0"
+                                max="10"></td>
+                        <td class="p-1"><input type="number" class="form-control text-center px-0 score-input"
+                                name="s_learning_innov" value="{{ score_data.get('s_learning_innov', 10)|int }}" min="0"
+                                max="10"></td>
+                        <td class="p-1"><input type="number" class="form-control text-center px-0 score-input"
+                                name="s_performance" value="{{ score_data.get('s_performance', 10)|int }}" min="0"
+                                max="10"></td>
+                        <td class="p-1"><input type="number" class="form-control text-center px-0 score-input"
+                                name="s_responsibility" value="{{ score_data.get('s_responsibility', 10)|int }}" min="0"
+                                max="10"></td>
+                        <td class="p-1"><input type="number" class="form-control text-center px-0 score-input"
+                                name="s_style_image" value="{{ score_data.get('s_style_image', 10)|int }}" min="0"
+                                max="10"></td>
+                        <td class="p-1"><input type="number" class="form-control text-center px-0 score-input"
+                                name="s_integrity" value="{{ score_data.get('s_integrity', 10)|int }}" min="0" max="10">
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <div class="card-footer">
+            <div class="text-danger fw-bold">
+                注：10-9分为优秀，8-7分为较好，6-5分为一般，4分以下为较差。请按照 0-10 分（整数）进行客观评价。
+            </div>
+        </div>
+    </div>
+
+    <!-- Indicator Info -->
+    <div class="card">
+        <div class="card-header bg-light">
+            <h3 class="card-title">指标说明 & 评价要点参考</h3>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-vcenter">
+                <thead>
+                    <tr>
+                        <th style="width: 100px;">指标说明</th>
+                        <th style="width: 60px;">权重</th>
+                        <th>评价要点</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>政治能力</td>
+                        <td>10%</td>
+                        <td class="text-muted small">
+                            深入学习贯彻习近平新时代中国特色社会主义思想，做到学思用贯通、知信行统一；严守党的政治纪律和政治规矩，牢记初心使命，严格对标对表，坚定拥护“两个确立”、坚决做到“两个维护”...
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>政治表现</td>
+                        <td>10%</td>
+                        <td class="text-muted small">坚定理想信念，涵养家国情怀，坚决贯彻落实党中央决策部署、集团公司党组和院党委工作部署，志存高远、奋勇争先...</td>
+                    </tr>
+                    <tr>
+                        <td>抓党建强党建</td>
+                        <td>10%</td>
+                        <td class="text-muted small">认真履行党建“一岗双责”，带头抓党建强党建；坚持围绕改革发展中心任务抓好党建工作，促进党建工作与生产经营深度融合...</td>
+                    </tr>
+                    <tr>
+                        <td>专业素养</td>
+                        <td>10%</td>
+                        <td class="text-muted small">善于把握市场经济规律和企业发展规律，掌握宏观经济形势和国家政策法规，培育国际视野、战略思维、法治理念...</td>
+                    </tr>
+                    <tr>
+                        <td>领导能力</td>
+                        <td>10%</td>
+                        <td class="text-muted small">作决策、做工作、抓管控的原则性、系统性、预见性、创造性强，做到科学决策、民主决策、依法决策...</td>
+                    </tr>
+                    <tr>
+                        <td>学习创新</td>
+                        <td>10%</td>
+                        <td class="text-muted small">弘扬企业家精神，注重学习，知行合一，树立强烈的创新意识，创新自信，敢闯敢试...</td>
+                    </tr>
+                    <tr>
+                        <td>履职成效</td>
+                        <td>10%</td>
+                        <td class="text-muted small">树立和践行正确的政绩观，认真履行岗位职责，全力做好本职工作，完成重点工作任务，实现经营业绩目标...</td>
+                    </tr>
+                    <tr>
+                        <td>担当作为</td>
+                        <td>10%</td>
+                        <td class="text-muted small">勇担当、善作为，遇事不推拖、不躲避，扑下身子干实事、谋实招、求实效...</td>
+                    </tr>
+                    <tr>
+                        <td>作风形象</td>
+                        <td>10%</td>
+                        <td class="text-muted small">带头弘扬党的优良传统和石油工业优良作风，坚持干字当头、实字托底...</td>
+                    </tr>
+                    <tr>
+                        <td>廉洁从业</td>
+                        <td>10%</td>
+                        <td class="text-muted small">严守党章党规党纪，严守廉洁从业各项规定，习惯在受监督和约束的环境中工作生活...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block script_extra %}
+<script>
+    async function submitScores() {
+        const limitExcellent = parseInt(document.getElementById('limit_excellent').value) || 0;
+        const rows = document.querySelectorAll('.person-row');
+        const data = [];
+
+        let countExcellent = 0;
+        let errorMsg = '';
+
+        for (const row of rows) {
+            const id = row.dataset.id;
+            const name = row.dataset.name;
+
+            // 1. Get Grade
+            const gradeInput = row.querySelector(`input[name="grade_${id}"]:checked`);
+            if (!gradeInput) {
+                alert(`请为 ${name} 选择评价等次`);
+                return;
+            }
+            const grade = gradeInput.value;
+            if (grade === '优秀') countExcellent++;
+
+            // 2. Get Scores
+            const inputs = row.querySelectorAll('.score-input');
+            const scores = {};
+
+            let tenCount = 0;
+            let allBelowEight = true;
+
+            for (const input of inputs) {
+                const val = parseFloat(input.value);
+                const key = input.name;
+
+                if (!Number.isInteger(val) || val < 0 || val > 10) {
+                    errorMsg = `${name}: 分数必须为 0-10 整数`;
+                    break;
+                }
+                if (val === 10) tenCount++;
+                if (val >= 8) allBelowEight = false;
+
+                scores[key] = val;
+            }
+            if (errorMsg) break;
+
+            // 3. Complex Logic Checks
+            if (grade === '称职' && tenCount > 6) {
+                errorMsg = `${name}: 评价为“称职”时，10分项不能超过 6 个`;
+                break;
+            }
+            if (grade === '基本称职' && tenCount > 0) {
+                errorMsg = `${name}: 评价为“基本称职”时，不能有 10 分项`;
+                break;
+            }
+            if (grade === '不称职' && !allBelowEight) {
+                errorMsg = `${name}: 评价为“不称职”时，各项评分需在 8 分以下`;
+                break;
+            }
+
+            data.push({ id, name, grade, scores });
+        }
+
+        if (errorMsg) {
+            alert(errorMsg);
+            return;
+        }
+
+        if (countExcellent > limitExcellent) {
+            alert(`评价为“优秀”的人数 (${countExcellent}人) 不能超过可评额度 (${limitExcellent}人)`);
+            return;
+        }
+
+        if (!confirm('确认提交本次评分吗？')) return;
+
+        try {
+            const res = await fetch('/api/assessment/personnel/submit', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ data: data })
+            });
+            const result = await res.json();
+            if (result.success) {
+                alert('提交成功');
+                window.location.reload();
+            } else {
+                alert('提交失败: ' + result.msg);
+            }
+        } catch (e) {
+            alert('系统异常: ' + e);
+        }
+    }
+</script>
+{% endblock %}

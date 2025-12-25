@@ -1,0 +1,293 @@
+{% extends "base_assessment.html" %}
+
+{% block content %}
+<div class="container-xl">
+    <div class="row g-2 align-items-center mb-3">
+        <div class="col">
+            <h2 class="page-title">领导班子综合考核评价表</h2>
+            <div class="text-muted mt-1">
+                请根据以下指标对 <strong>{{ session.get('assessor_dept_name', '未知部门') }}</strong> 领导班子进行打分。
+            </div>
+        </div>
+        <div class="col-auto ms-auto">
+            <button class="btn btn-primary" onclick="submitScores()">
+                <i class="ti ti-send me-2"></i>{% if existing_scores %}更新评分{% else %}提交评分{% endif %}
+            </button>
+        </div>
+    </div>
+
+    <style>
+        .score-input {
+            padding: 0 !important;
+            height: 36px;
+            font-size: 15px;
+            border: 1px solid transparent;
+            /* Invisible border by default */
+            background: rgba(0, 0, 0, 0.02);
+            /* Very faint background to show area */
+        }
+
+        .score-input:focus {
+            background: #fff;
+            border: 1px solid #206bc4;
+            box-shadow: none;
+        }
+    </style>
+
+    <div class="card mb-3">
+        <div class="card-header">
+            <h3 class="card-title">被考核部门：{{ session.get('assessor_dept_name', '') }}</h3>
+            {% if existing_scores %}
+            <span class="badge bg-green ms-2">已提交</span>
+            {% endif %}
+        </div>
+        <div class="table-responsive">
+            <table class="table table-bordered text-center align-middle mb-0" style="min-width: 1200px;">
+                <thead>
+                    <tr class="bg-light">
+                        <th colspan="1">政治建设</th>
+                        <th colspan="4">经营发展</th>
+                        <th colspan="3">改革创新</th>
+                        <th colspan="2">党建工作</th>
+                        <th colspan="2">作风建设</th>
+                    </tr>
+                    <tr class="bg-white">
+                        <th style="min-width: 80px;">政治担当</th>
+                        <th style="min-width: 80px;">社会责任</th>
+                        <th style="min-width: 80px;">经营效益</th>
+                        <th style="min-width: 80px;">管理效能</th>
+                        <th style="min-width: 80px;">风险管控</th>
+                        <th style="min-width: 80px;">科技创新</th>
+                        <th style="min-width: 80px;">深化改革</th>
+                        <th style="min-width: 80px;">人才强企</th>
+                        <th style="min-width: 80px;">基层党建</th>
+                        <th style="min-width: 80px;">党风廉政</th>
+                        <th style="min-width: 80px;">团结协作</th>
+                        <th style="min-width: 80px;">联系群众</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <!-- 12 Input Fields -->
+                        <!-- Value Binding: use existing_scores.field if exists, else 10 -->
+                        {% set scores = existing_scores or {} %}
+
+                        <td class="p-1"><input type="number" class="form-control text-center score-input px-1"
+                                name="s_political_resp" value="{{ scores.get('s_political_resp', 10) | int }}" min="0"
+                                max="10" step="1"></td>
+                        <td class="p-1"><input type="number" class="form-control text-center score-input px-1"
+                                name="s_social_resp" value="{{ scores.get('s_social_resp', 10) | int }}" min="0"
+                                max="10" step="1"></td>
+                        <td class="p-1"><input type="number" class="form-control text-center score-input px-1"
+                                name="s_manage_benefit" value="{{ scores.get('s_manage_benefit', 10) | int }}" min="0"
+                                max="10" step="1"></td>
+                        <td class="p-1"><input type="number" class="form-control text-center score-input px-1"
+                                name="s_manage_effic" value="{{ scores.get('s_manage_effic', 10) | int }}" min="0"
+                                max="10" step="1"></td>
+                        <td class="p-1"><input type="number" class="form-control text-center score-input px-1"
+                                name="s_risk_control" value="{{ scores.get('s_risk_control', 10) | int }}" min="0"
+                                max="10" step="1"></td>
+                        <td class="p-1"><input type="number" class="form-control text-center score-input px-1"
+                                name="s_tech_innov" value="{{ scores.get('s_tech_innov', 10) | int }}" min="0" max="10"
+                                step="1"></td>
+                        <td class="p-1"><input type="number" class="form-control text-center score-input px-1"
+                                name="s_deep_reform" value="{{ scores.get('s_deep_reform', 10) | int }}" min="0"
+                                max="10" step="1"></td>
+                        <td class="p-1"><input type="number" class="form-control text-center score-input px-1"
+                                name="s_talent_strength" value="{{ scores.get('s_talent_strength', 10) | int }}" min="0"
+                                max="10" step="1"></td>
+                        <td class="p-1"><input type="number" class="form-control text-center score-input px-1"
+                                name="s_party_build" value="{{ scores.get('s_party_build', 10) | int }}" min="0"
+                                max="10" step="1"></td>
+                        <td class="p-1"><input type="number" class="form-control text-center score-input px-1"
+                                name="s_party_conduct" value="{{ scores.get('s_party_conduct', 10) | int }}" min="0"
+                                max="10" step="1"></td>
+                        <td class="p-1"><input type="number" class="form-control text-center score-input px-1"
+                                name="s_unity" value="{{ scores.get('s_unity', 10) | int }}" min="0" max="10" step="1">
+                        </td>
+                        <td class="p-1"><input type="number" class="form-control text-center score-input px-1"
+                                name="s_mass_ties" value="{{ scores.get('s_mass_ties', 10) | int }}" min="0" max="10"
+                                step="1"></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        <div class="card-footer">
+            <div class="text-danger fw-bold">
+                注：10-9分为优秀，8-7分为较好，6-5分为一般，4分以下为较差。请按照 0-10 分（整数）进行客观评价。
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header bg-light">
+            <h3 class="card-title">指标说明 & 评价要点参考</h3>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-vcenter">
+                <thead>
+                    <tr>
+                        <th style="width: 100px;">指标说明</th>
+                        <th style="width: 60px;">权重</th>
+                        <th>评价要点</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>政治担当</td>
+                        <td>10%</td>
+                        <td class="text-muted small">
+                            坚持以党的政治建设为统领，自觉用习近平新时代中国特色社会主义思想武装头脑，深刻领悟“两个确立”的决定性意义，增强“四个意识”、坚定“四个自信”、做到“两个维护”；坚持正确政治方向，坚决贯彻落实党中央决策部署和习近平总书记重要指示批示精神以及集团公司党组和院党委工作部署，结合实际转化为石化院的战略目标、工作举措和改革发展实际成效；胸怀“国之大者”，坚守职责使命，聚焦主责主业，服务保障国家能源安全，支撑集团公司当好能源保供“顶梁柱”；严守党的政治纪律和政治规矩，严格执行重大事项请示报告制度，严肃党内政治生活，营造风清气正政治生态。
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>社会责任</td>
+                        <td>5%</td>
+                        <td class="text-muted small">
+                            维护市场经济秩序，模范遵守法律法规、商业道德和行业规则，产品和服务质量高，社会形象良好；正确处理企业利益与国家利益、公共利益的关系，推动集团公司成为国民经济稳增长的“压舱石”，在保障和改善民生、乡村振兴、污染防治、抢险救灾、应对重大突发公共卫生事件等方面积极投入、主动担责。
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>经营效益</td>
+                        <td>10%</td>
+                        <td class="text-muted small">
+                            把握新发展阶段，完整、准确、全面贯彻新发展理念，服务和融入新发展格局，推动石化院高质量发展；注重价值创造，突出效率效益，推进提质增效，企业经营状况和经济效益良好，资本回报水平、劳动产出效率和价值创造能力不断提升，全面实现国有资产保值增值。
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>管理效能</td>
+                        <td>10%</td>
+                        <td class="text-muted small">
+                            规章制度完备，管理运行有章可循、有规可依；决策机制科学，分级授权合理；企业管控有力，执行力强；坚持市场导向、客户至上，以销定产、以产促销，一体协同、竞合共赢，市场化经营机制完善；遵循“四精”理念，深化精益管理，健全完善管理提升长效机制，管理理念先进、方法科学，管理能效高，石化院内在活力、市场竞争力、发展引领力持续增强。
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>风险管控</td>
+                        <td>10%</td>
+                        <td class="text-muted small">
+                            统筹高质量发展和高水平安全，强化依法合规经营和全面从严治企，加强重点领域监管监督，风险意识强，风险体系健全；坚持底线思维、极限思维，能够精准研判和妥善应对战略管控、投资决策、安全环保、和谐稳定、海外经营等领域的重大风险，对重大问题和突发事件反应灵敏、判断准确、处置有力。
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>科技创新</td>
+                        <td>10%</td>
+                        <td class="text-muted small">
+                            坚持科技是第一生产力，加强基础研究和应用基础研究，强化关键核心技术攻关和成果转化应用，破解“卡脖子”问题，加快实现高水平科技自立自强；实施创新驱动发展战略，加快发展战略性新兴产业和未来产业，形成新质生产力，推动企业转型升级发展；加快“智慧石化院”建设，推动数字技术为技术研发、生产经营、企业管理赋能。
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>深化改革</td>
+                        <td>10%</td>
+                        <td class="text-muted small">
+                            全面落实“两个一以贯之”，在完善公司治理中加强党的领导，健全完善现代企业制度，提升公司治理效能；围绕激发活力、提高效率，深化劳动、人事、分配三项制度改革；大力推进功能性改革，巩固深化机制性改革，深化科技体制改革、业务结构优化调整、组织体系优化提升、优化市场化经营机制等改革重点任务顺利推进。
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>人才强企</td>
+                        <td>10%</td>
+                        <td class="text-muted small">
+                            坚持党管干部、党管人才原则，以工程思维推动人才强院工程，努力打造聚才集智的人才高地；健全“选育管用”干部管理机制，发挥领导和把关作用，狠抓能力提升和结构优化，大力发现培养选拔优秀年轻干部，建设堪当重任的高素质专业化干部队伍；完善“生聚理用”人才发展机制，着力集聚矢志爱国奉献、勇于创新创造的优秀人才，培养造就更多战略科学家、科技领军人才和创新团队、青年科技人才、卓越工程师、国际化人才、大国工匠、石油名匠等。
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>基层党建</td>
+                        <td>7.5%</td>
+                        <td class="text-muted small">
+                            层层落实管党治党责任，组织体系健全，基层党组织设置合理、按期换届；基层党组织政治功能和组织功能强，党的组织生活经常、严肃、认真，基层党建“三基本”建设与“三基”工作有机融合，基层党组织在有效实现党的领导中战斗堡垒作用突出；重视基层党组织书记、党务工作者队伍建设和发展党员工作；加强对思想政治工作、精神文明建设、统一战线工作和工会、共青团、妇女组织等群团组织的领导。
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>党风廉政</td>
+                        <td>7.5%</td>
+                        <td class="text-muted small">
+                            贯彻“两个永远在路上”，落实全面从严治党主体责任和监督责任，健全监督体系，推进政治监督具体化、精准化、常态化；一体推进不敢腐、不能腐、不想腐，持之以恒正风肃纪反腐；对巡视和审计发现问题整改到位，实现内部巡察和审计全覆盖，充分运用巡视巡察和审计成果；从严规范中级管理人员配偶、子女及其配偶经商办企业等行为。
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>团结协作</td>
+                        <td>5%</td>
+                        <td class="text-muted small">
+                            贯彻民主集中制原则，完善并落实议事规则和决策程序，坚持科学决策、民主决策、依法决策；领导班子分工合理、职责明确，整体功能强；领导班子团结顾大局，相互支持、密切配合；坚持原则，勇于开展批评与自我批评，民主生活会质量高。
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>联系群众</td>
+                        <td>5%</td>
+                        <td class="text-muted small">
+                            贯彻党的群众路线，全心全意依靠职工群众办企业；坚持以人为本，切实维护职工群众合法权益，为职工群众办实事，职工队伍稳定、满意度高；坚持厂务公开，组织职工群众积极参与民主管理；严格落实中央八项规定及其实施细则精神，持续深化纠治“四风”。
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block script_extra %}
+<script>
+    async function submitScores() {
+        const inputs = document.querySelectorAll('.score-input');
+        const scores = {};
+
+        let allTen = true;
+        let validFormat = true;
+        let errorMessage = '';
+
+        for (const input of inputs) {
+            const val = parseFloat(input.value);
+            const name = input.name;
+
+            // 1. Check Format (Integer 0-10)
+            if (!Number.isInteger(val) || val < 0 || val > 10) {
+                input.classList.add('is-invalid');
+                validFormat = false;
+                errorMessage = '分数必须是 0-10 之间的整数';
+            } else {
+                input.classList.remove('is-invalid');
+            }
+
+            // 2. Check "Not All 10"
+            if (val !== 10) {
+                allTen = false;
+            }
+
+            scores[name] = val;
+        }
+
+        if (!validFormat) {
+            alert('评分格式错误：' + errorMessage);
+            return;
+        }
+
+        if (allTen) {
+            alert('请进行有效评分，至少有一项不是10分。');
+            return;
+        }
+
+        // Confirmation (Update vs Submit)
+        const actionText = '{{ "更新" if existing_scores else "提交" }}';
+        if (!confirm(`确认${actionText}本次评分吗？`)) {
+            return;
+        }
+
+        try {
+            const res = await fetch('/api/assessment/team/submit', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ scores: scores })
+            });
+
+            const result = await res.json();
+            if (result.success) {
+                alert(`${actionText}成功！`);
+                window.location.reload(); // Reload to show updated data and "Submitted" status
+            } else {
+                alert('提交失败：' + result.msg);
+            }
+        } catch (e) {
+            alert('网络或系统异常：' + e);
+        }
+    }
+</script>
+{% endblock %}

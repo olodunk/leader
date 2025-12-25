@@ -209,9 +209,38 @@ def init_db():
             examinee_role TEXT NOT NULL,  -- 被考核人角色 (列头)
             rater_role TEXT NOT NULL,     -- 考核人角色 (行头)
             weight REAL DEFAULT 0,        -- 权重 (百分比, e.g. 10.0)
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             
-            UNIQUE(examinee_role, rater_role),
-            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            UNIQUE(examinee_role, rater_role)
+        )
+    ''')
+
+    # --------------------------------------------------------
+    # 表 10: 领导班子评分表 (team_scores)
+    # --------------------------------------------------------
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS team_scores (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            rater_account TEXT,         -- 打分账号 (username)
+            target_dept_code TEXT,      -- 被考核部门代码
+            
+            -- 12项评分
+            s_political_resp REAL,
+            s_social_resp REAL,
+            s_manage_benefit REAL,
+            s_manage_effic REAL,
+            s_risk_control REAL,
+            s_tech_innov REAL,
+            s_deep_reform REAL,
+            s_talent_strength REAL,
+            s_party_build REAL,
+            s_party_conduct REAL,
+            s_unity REAL,
+            s_mass_ties REAL,
+            
+            total_score REAL,           -- 总分 (后台加权计算后)
+            
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )
     ''')
 
@@ -225,6 +254,40 @@ def init_db():
         cursor.execute('INSERT INTO sys_users (username, password) VALUES (?, ?)', ('admin', default_pw))
         print("已创建默认管理员账号: admin / admin123")
 
+    # --------------------------------------------------------
+    # 表 7: 领导人员综合考核评价表 (personnel_scores)
+    # --------------------------------------------------------
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS personnel_scores (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            rater_account TEXT NOT NULL,         -- 打分人账号
+            target_dept_code TEXT NOT NULL,      -- 被考核部门代码
+            examinee_id INTEGER NOT NULL,        -- 被考核人ID (关联 middle_managers)
+            examinee_name TEXT,                  -- 被考核人姓名 (冗余)
+            
+            evaluation_grade TEXT,               -- 评价等次 (优秀/称职/基本称职/不称职)
+            
+            -- 10个评分维度 (各占 10%)
+            s_political_ability REAL DEFAULT 0,  
+            s_political_perf REAL DEFAULT 0,     
+            s_party_build REAL DEFAULT 0,        
+            s_professionalism REAL DEFAULT 0,    
+            s_leadership REAL DEFAULT 0,         
+            s_learning_innov REAL DEFAULT 0,     
+            s_performance REAL DEFAULT 0,        
+            s_responsibility REAL DEFAULT 0,     
+            s_style_image REAL DEFAULT 0,        
+            s_integrity REAL DEFAULT 0,          
+            
+            total_score REAL DEFAULT 0,          
+            
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    
+    print("数据库初始化完成 (包含 personnel_scores)。")
+    
     # --------------------------------------------------------
     # 自动 Schema 升级 (Migration) Logic
     # --------------------------------------------------------

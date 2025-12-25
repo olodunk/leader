@@ -1,13 +1,29 @@
-<!doctype html>
-<html lang="zh">
+{% extends "base_assessment.html" %}
 
-<head>
-    <meta charset="utf-8" />
-    <title>测评打分 - 干部考核系统</title>
-</head>
+{% block content %}
+<div class="container-xl">
+    <div class="row g-2 align-items-center mb-4">
+        <div class="col">
+            <h2 class="page-title">欢迎参加干部测评</h2>
+            <div class="text-muted mt-1">请从左侧菜单选择打分项目进行评价。所有项目评分完成后，请确认提交。</div>
+        </div>
+    </div>
 
-<body>
-    <h1>详细打分页面后面完善</h1>
-</body>
-
-</html>
+    <div class="row row-cards">
+        <div class="col-md-12">
+            <div class="card card-active">
+                <div class="card-body">
+                    <h3 class="card-title">注意事项</h3>
+                    <ul class="list-unstyled space-y-2">
+                        <li><i class="ti ti-check text-success me-2"></i> 请客观、公正地对考核对象进行评价。</li>
+                        <li><i class="ti ti-check text-success me-2"></i> 评分数据实时自动保存，但在点击“提交”前可以反复修改。</li>
+                        <li><i class="ti ti-check text-success me-2"></i> <strong>领导班子综合考核评价</strong>：对所辖范围内的领导班子整体进行打分。
+                        </li>
+                        {# 更多说明... #}
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

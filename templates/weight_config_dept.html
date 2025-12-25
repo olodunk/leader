@@ -204,39 +204,113 @@
 
 {% block script_extra %}
 <script>
-    document.addEventListener('DOMContentLoaded', calculateTotals);
+    document.addEventListener('DOMContentLoaded', () => {
+        bindSharedInputs();
+        calculateTotals();
+    });
+
+    const TARGET_COLS = ['院长助理', '职能部门正职'];
+    const SHARE_ROWS = ['中心领导班子 (正职)', '所属分公司班子正职'];
+
+    function bindSharedInputs() {
+        // Find inputs that belong to the "Shared Group"
+        TARGET_COLS.forEach(col => {
+            // Get the two specific inputs for this column
+            const inputs = [];
+            SHARE_ROWS.forEach(row => {
+                const el = document.querySelector(`input[data-col="${col}"][data-row="${row}"]`);
+                if (el) inputs.push(el);
+            });
+
+            if (inputs.length === 2) {
+                const [inputA, inputB] = inputs;
+                
+                // Add visual indicator
+                inputA.classList.add('bg-warning-lt'); // Light warning background
+                inputB.classList.add('bg-warning-lt');
+                inputA.title = "与分公司正职共享权重";
+                inputB.title = "与中心正职共享权重";
+
+                // Bind A -> B
+                inputA.addEventListener('input', () => {
+                    inputB.value = inputA.value;
+                    calculateTotals();
+                });
+                
+                // Bind B -> A
+                inputB.addEventListener('input', () => {
+                    inputA.value = inputB.value;
+                    calculateTotals();
+                });
+            }
+        });
+    }
 
     function calculateTotals() {
-        const cols = {{ col_headers | tojson
-    }};
-    let allValid = true;
+        const cols = {{ col_headers | tojson }};
+        let allValid = true;
 
-    cols.forEach((col, idx) => {
-        let sum = 0;
-        const inputs = document.querySelectorAll(`input[data-col="${col}"]`);
-        inputs.forEach(input => {
-            sum += parseFloat(input.value) || 0;
+        cols.forEach((col, idx) => {
+            let sum = 0;
+            const inputs = document.querySelectorAll(`input[data-col="${col}"]`);
+            
+            // Special Logic for Target Columns
+            if (TARGET_COLS.includes(col)) {
+                // Sum regular rows
+                inputs.forEach(input => {
+                    const rowName = input.dataset.row;
+                    // Skip the shared rows in the standard loop
+                    if (!SHARE_ROWS.includes(rowName)) {
+                        sum += parseFloat(input.value) || 0;
+                    }
+                });
+
+                // Add ONE instance of the shared weight
+                // (Assuming they are synced, take the first one found)
+                const sharedInput = document.querySelector(`input[data-col="${col}"][data-row="${SHARE_ROWS[0]}"]`);
+                if (sharedInput) {
+                    sum += parseFloat(sharedInput.value) || 0;
+                }
+                
+            } else {
+                // Standard Logic for other columns
+                inputs.forEach(input => {
+                    sum += parseFloat(input.value) || 0;
+                });
+            }
+
+            // Update Footer
+            const cell = document.getElementById(`total-${idx}`);
+            // Fix floating point precision
+            sum = Math.round(sum * 100) / 100;
+            cell.innerText = sum + '%';
+
+            if (sum === 100) {
+                cell.classList.remove('text-danger');
+                cell.classList.add('text-success');
+            } else {
+                cell.classList.remove('text-success');
+                cell.classList.add('text-danger');
+                allValid = false;
+            }
         });
-
-        // Update Footer
-        const cell = document.getElementById(`total-${idx}`);
-        cell.innerText = sum + '%';
-
-        if (sum === 100) {
-            cell.classList.remove('text-danger');
-            cell.classList.add('text-success');
-        } else {
-            cell.classList.remove('text-success');
-            cell.classList.add('text-danger');
-            allValid = false;
-        }
-    });
     }
 
     async function saveWeights() {
         // Validate
-        if (document.querySelector('.text-danger')) {
-            if (!confirm('部分列总和不为 100%，确定要保存吗？')) return;
+        // Validate: Check if any footer cell still has 'text-danger'
+        const invalidCells = document.querySelectorAll('tfoot td.text-danger');
+        if (invalidCells.length > 0) {
+            // Optional: Get invalid column names for better UX
+            const invalidCols = Array.from(invalidCells).map(td => {
+                 // Find corresponding header? 
+                 // td id is total-0, total-1...
+                 const idx = parseInt(td.id.split('-')[1]);
+                 const header = document.querySelectorAll('thead th')[idx + 1]; // +1 for first empty th
+                 return header ? header.innerText : (idx + 1);
+            });
+            
+            if (!confirm(`以下列总和不为 100%：\n${invalidCols.join(', ')}\n\n确定要保存吗？`)) return;
         }
 
         const data = [];
