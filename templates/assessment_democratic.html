@@ -1,0 +1,304 @@
+{% extends "base_assessment.html" %}
+
+{% block content %}
+<div class="container-fluid px-4">
+    <div class="row g-2 align-items-center mb-3">
+        <div class="col">
+            <h2 class="page-title">{{ page_title }}</h2>
+        </div>
+        <div class="col-auto ms-auto">
+            <button class="btn btn-primary" onclick="submitScores()">
+                <i class="ti ti-send me-2"></i>提交评分
+            </button>
+        </div>
+    </div>
+
+    <style>
+        .vertical-header {
+            writing-mode: vertical-rl;
+            text-orientation: mixed;
+            white-space: nowrap;
+            letter-spacing: 4px;
+            padding: 10px 5px !important;
+            height: 130px;
+            vertical-align: middle;
+        }
+
+        .score-col {
+            width: 45px;
+            min-width: 45px;
+            padding: 0 !important;
+        }
+
+        .score-input {
+            padding: 0 !important;
+            height: 36px;
+            font-size: 15px;
+            border: 1px solid transparent;
+            background: rgba(0, 0, 0, 0.02);
+            text-align: center;
+        }
+
+        .score-input:focus {
+            background: #fff;
+            border: 1px solid #206bc4;
+            box-shadow: none;
+        }
+    </style>
+
+    {% for group in groups %}
+    <div class="card mb-4" style="overflow: visible;">
+        <div class="card-header">
+            <h3 class="card-title">{{ group.title }}</h3>
+        </div>
+        <div class="table-responsive" style="overflow-x: auto;">
+            <table class="table table-bordered table-vcenter text-center align-middle mb-0">
+                <thead>
+                    <tr class="bg-light">
+                        <th rowspan="2" style="width: 40px;">序号</th>
+                        <th rowspan="2" style="width: 70px;">姓名</th>
+                        <th rowspan="2" style="width: 40px;">性别</th>
+                        <th rowspan="2" style="width: 100px;">现职务</th>
+                        <th rowspan="2" style="width: 100px;">部门名称</th>
+                        <th colspan="3">政治坚强</th>
+                        <th colspan="3">本领高强</th>
+                        <th colspan="4">意志顽强</th>
+                    </tr>
+                    <tr class="bg-white small">
+                        <th class="vertical-header score-col">政治能力</th>
+                        <th class="vertical-header score-col">政治表现</th>
+                        <th class="vertical-header score-col">抓党建强党建</th>
+                        <th class="vertical-header score-col">专业素养</th>
+                        <th class="vertical-header score-col">领导能力</th>
+                        <th class="vertical-header score-col">学习创新</th>
+                        <th class="vertical-header score-col">履职成效</th>
+                        <th class="vertical-header score-col">担当作为</th>
+                        <th class="vertical-header score-col">作风形象</th>
+                        <th class="vertical-header score-col">廉洁从业</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for m in group.members %}
+                    {% set score_data = scores_map.get(m.id, {}) %}
+
+                    <tr class="person-row" data-id="{{ m.id }}" data-name="{{ m.name }}" data-role="{{ m.role }}">
+                        <td>{{ loop.index }}</td>
+                        <td>{{ m.name }}</td>
+                        <td>{{ m.gender }}</td>
+                        <td class="text-wrap small" style="max-width: 120px; line-height: 1.2;">{{ m.position }}</td>
+                        <td class="text-wrap small" style="max-width: 100px; line-height: 1.2;">{{ m.dept_name }}</td>
+
+                        <!-- Scores -->
+                        <td class="p-1"><input type="number" class="form-control text-center px-0 score-input"
+                                name="s_political_ability" value="{{ score_data.get('s_political_ability', '') }}"
+                                min="0" max="10"></td>
+                        <td class="p-1"><input type="number" class="form-control text-center px-0 score-input"
+                                name="s_political_perf" value="{{ score_data.get('s_political_perf', '') }}" min="0"
+                                max="10"></td>
+                        <td class="p-1"><input type="number" class="form-control text-center px-0 score-input"
+                                name="s_party_build" value="{{ score_data.get('s_party_build', '') }}" min="0" max="10">
+                        </td>
+                        <td class="p-1"><input type="number" class="form-control text-center px-0 score-input"
+                                name="s_professionalism" value="{{ score_data.get('s_professionalism', '') }}" min="0"
+                                max="10"></td>
+                        <td class="p-1"><input type="number" class="form-control text-center px-0 score-input"
+                                name="s_leadership" value="{{ score_data.get('s_leadership', '') }}" min="0" max="10">
+                        </td>
+                        <td class="p-1"><input type="number" class="form-control text-center px-0 score-input"
+                                name="s_learning_innov" value="{{ score_data.get('s_learning_innov', '') }}" min="0"
+                                max="10"></td>
+                        <td class="p-1"><input type="number" class="form-control text-center px-0 score-input"
+                                name="s_performance" value="{{ score_data.get('s_performance', '') }}" min="0" max="10">
+                        </td>
+                        <td class="p-1"><input type="number" class="form-control text-center px-0 score-input"
+                                name="s_responsibility" value="{{ score_data.get('s_responsibility', '') }}" min="0"
+                                max="10"></td>
+                        <td class="p-1"><input type="number" class="form-control text-center px-0 score-input"
+                                name="s_style_image" value="{{ score_data.get('s_style_image', '') }}" min="0" max="10">
+                        </td>
+                        <td class="p-1"><input type="number" class="form-control text-center px-0 score-input"
+                                name="s_integrity" value="{{ score_data.get('s_integrity', '') }}" min="0" max="10">
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endfor %}
+
+    <!-- Footer Note -->
+    <div class="card mb-3">
+        <div class="card-footer">
+            <div class="text-danger fw-bold">
+                注：10-9分为优秀，8-7分为较好，6-5分为一般，4分以下为较差。请按照 0-10 分（整数）进行客观评价。
+            </div>
+        </div>
+    </div>
+
+    <!-- Indicator Info (Identical to Personnel Page) -->
+    <div class="card">
+        <div class="card-header bg-light">
+            <h3 class="card-title">指标说明 & 评价要点参考</h3>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-vcenter">
+                <thead>
+                    <tr>
+                        <th style="width: 100px;">指标说明</th>
+                        <th style="width: 60px;">权重</th>
+                        <th>评价要点</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>政治能力</td>
+                        <td>10%</td>
+                        <td class="text-muted small">
+                            深入学习贯彻习近平新时代中国特色社会主义思想，做到学思用贯通、知信行统一；严守党的政治纪律和政治规矩，牢记初心使命，严格对标对表，坚定拥护“两个确立”、坚决做到“两个维护”，自觉在思想上政治上行动上同以习近平同志为核心的党中央保持高度一致；注重加强政治能力训练和政治实践历练，提高政治判断力、政治领悟力、政治执行力，切实提高把握方向、把握大势、把握全局的能力和辨别政治是非、保持政治定力、防范政治风险的能力。
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>政治表现</td>
+                        <td>10%</td>
+                        <td class="text-muted small">
+                            坚定理想信念，涵养家国情怀，坚决贯彻落实党中央决策部署、集团公司党组和院党委工作部署，志存高远、奋勇争先，坚定建设世界一流研究院的信心和决心；坚持从讲政治的高度做好石化院改革发展稳定各项工作，坚持从政治上分析问题、解决问题，自觉在保障国家能源安全的大局下想问题、做工作；表里如一、言行一致，正确处理公和私、义和利、是和非、正和邪、苦和乐的关系，正确对待自己、组织和他人；发扬斗争精神，增强斗争本领，在关键时刻，大是大非面前态度鲜明、立场坚定、敢于斗争、善于斗争。
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>抓党建强党建</td>
+                        <td>10%</td>
+                        <td class="text-muted small">
+                            认真履行党建“一岗双责”，带头抓党建强党建；坚持围绕改革发展中心任务抓好党建工作，促进党建工作与生产经营深度融合，充分发挥高质量党建引领和推动企业高质量发展作用；落实党风廉政建设责任制，严于律己、严负其责，严管所辖，推动分管领域落实党风廉政建设各项部署要求。
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>专业素养</td>
+                        <td>10%</td>
+                        <td class="text-muted small">
+                            善于把握市场经济规律和企业发展规律，掌握宏观经济形势和国家政策法规，培育国际视野、战略思维、法治理念，掌握专业知识，增强专业能力、专业作风、专业精神；懂经营会管理善决策，善于运用现代企业管理理念和方式管理企业，推动实现世界一流目标。
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>领导能力</td>
+                        <td>10%</td>
+                        <td class="text-muted small">
+                            作决策、做工作、抓管控的原则性、系统性、预见性、创造性强，做到科学决策、民主决策、依法决策；善于驾驭复杂局面、处理复杂问题；民主意识强，讲团结重协作，善于抓班子、带队伍，注重发现、培养、引进和使用人才；坚持依法依规治企，自觉尊崇制度、严格执行制度、坚决维护制度，制度执行力强。
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>学习创新</td>
+                        <td>10%</td>
+                        <td class="text-muted small">
+                            弘扬企业家精神，注重学习，知行合一，树立强烈的创新意识、创新自信，敢闯敢试、敢为人先，勇于改革、善谋改革，敢于打破常规、敢于承担风险；解放思想、转变观念、勇于创新，持续推动企业技术创新、管理创新、商业模式创新等，形成以创新为主要引领和支撑的发展模式；市场感觉敏锐，善于捕捉商机、培育新机，通过创新破解发展难题、提升整体效能；尊重人才、尊重创造，营造鼓励创新、宽容失败的氛围，激发创新热情和创造活力。
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>履职成效</td>
+                        <td>10%</td>
+                        <td class="text-muted small">
+                            树立和践行正确的政绩观，认真履行岗位职责，全力做好本职工作，完成重点工作任务，实现经营业绩目标；对经理层成员重点评价在经理层谋改革、抓落实、强管理，组织生产经营、完成经营管理目标等方面履职成效；对党组织领导班子成员重点评价在党委把方向、管大局、保落实，履行全面从严治党责任，依照有关规定讨论和决定企业重大事项等方面履职成效。
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>担当作为</td>
+                        <td>10%</td>
+                        <td class="text-muted small">
+                            勇担当、善作为，遇事不推拖、不躲避，扑下身子干实事、谋实招、求实效，有效解决企业改革发展稳定重点难点问题；敢于担当责任，勇于直面矛盾，善于解决问题，知重负重、攻坚克难，在有效应对重大挑战、抵御重大风险、克服重大阻力、解决重大矛盾中冲锋在前、履职尽责；坚韧不拔，百折不挠，执着坚守，关键时刻冲得上、顶得住，坚定不移完成各项目标任务，始终做到难不住、压不垮。
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>作风形象</td>
+                        <td>10%</td>
+                        <td class="text-muted small">
+                            带头弘扬党的光荣传统和石油工业优良作风，坚持干字当头、实字托底、事不避难、力戒浮华，大兴调查研究，矢志敬业奉献，以钉钉子精神抓部署、抓落实、抓督查；践行社会主义核心价值观，明大德、守公德、严私德，遵守社会道德、职业道德、家庭美德和个人品德；坚持正确的生活态度、健康的生活情趣、文明的生活方式，自觉抵制各种诱惑。
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>廉洁从业</td>
+                        <td>10%</td>
+                        <td class="text-muted small">
+                            严守党章党规党纪，严守廉洁从业各项规定，习惯在受监督和约束的环境中工作生活，知敬畏、存戒惧、守底线；坚持谨慎用权、严守底线、公私分明、诚实守信，坚决反对设租寻租、“靠企吃企”，防止利益输送、以权谋私等行为；带头落实中央八项规定及其实施细则精神，坚决反对“四风”，坚决破除特权思想、特权行为；注重家庭家教家风，管好配偶、子女及其配偶和身边工作人员。
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block script_extra %}
+<script>
+    async function submitScores() {
+        const rows = document.querySelectorAll('.person-row');
+        const data = [];
+        let errorMsg = '';
+
+        for (const row of rows) {
+            const id = row.dataset.id;
+            const name = row.dataset.name;
+            const role = row.dataset.role;
+
+            const inputs = row.querySelectorAll('.score-input');
+            const scores = {};
+            let hasInput = false;
+
+            inputs.forEach(input => {
+                const val = parseFloat(input.value);
+                if (!isNaN(val)) {
+                    hasInput = true;
+                    if (val < 0 || val > 10) {
+                        errorMsg = `${name} 的 ${input.name} 分数必须在 0-10 之间`;
+                    }
+                    scores[input.name] = val;
+                }
+            });
+
+            // Submission Logic:
+            // 1. If any score is entered, ALL scores must be entered (or default to 0? Requirements say "Must rate").
+            // Let's assume validation requires completeness if started.
+            if (hasInput) {
+                if (Object.keys(scores).length < 10) {
+                    errorMsg = `请完整填写 ${name} 的所有 10 项评分`;
+                }
+                data.push({
+                    id: id,
+                    name: name,
+                    role: role,
+                    scores: scores
+                });
+            }
+        }
+
+        if (errorMsg) {
+            alert(errorMsg);
+            return;
+        }
+
+        if (data.length === 0) {
+            alert("请至少填写一人的评分信息");
+            return;
+        }
+
+        if (!confirm(`即将提交 ${data.length} 人的评分，提交后不可修改（逻辑上可多次提交），确定吗？`)) return;
+
+        try {
+            const res = await fetch('/api/assessment/democratic/submit', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ data: data })
+            });
+            const result = await res.json();
+            if (result.success) {
+                alert('提交成功');
+                location.reload();
+            } else {
+                alert('提交失败: ' + result.msg);
+            }
+        } catch (e) {
+            alert('网络错误');
+        }
+    }
+</script>
+{% endblock %}

@@ -331,6 +331,47 @@ def upgrade_schema(cursor):
     for col in dept_cols:
         add_column('department_config', col)
     
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS democratic_scores (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            rater_account TEXT NOT NULL,
+            examinee_id INTEGER NOT NULL,
+            examinee_role TEXT,
+            
+            s_political_ability REAL DEFAULT 0,
+            s_political_perf REAL DEFAULT 0,
+            s_party_build REAL DEFAULT 0,
+            s_professionalism REAL DEFAULT 0,
+            s_leadership REAL DEFAULT 0,
+            s_learning_innov REAL DEFAULT 0,
+            s_performance REAL DEFAULT 0,
+            s_responsibility REAL DEFAULT 0,
+            s_style_image REAL DEFAULT 0,
+            s_integrity REAL DEFAULT 0,
+            
+            total_score REAL DEFAULT 0,
+            
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+
+    # --------------------------------------------------------
+    # 表 11: 民主测评权限配置表 (democratic_rating_config) - V5 New
+    # --------------------------------------------------------
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS democratic_rating_config (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            examinee_role TEXT NOT NULL,  -- 被考核人角色 (列头)
+            rater_role TEXT NOT NULL,     -- 考核人角色 (行头)
+            is_allowed INTEGER DEFAULT 0, -- 1=允许打分, 0=不允许
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            
+            UNIQUE(examinee_role, rater_role)
+        )
+    ''')
+
+
     # 2. middle_managers 表新增列
     mgr_cols = [
         "dept_code TEXT",

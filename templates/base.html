@@ -106,6 +106,8 @@
               <div class="dropdown-menu {% if config_active %}show{% endif %}">
                 <a class="dropdown-item {% if request.endpoint == 'weight_config_dept' %}active{% endif %}"
                   href="{{ url_for('weight_config_dept') }}">部门权重配置</a>
+                <a class="dropdown-item {% if request.endpoint == 'democratic_config' %}active{% endif %}"
+                  href="{{ url_for('democratic_config') }}">中层干部测评打分对应</a>
                 <a class="dropdown-item" href="#">院领导权重配置</a>
               </div>
             </li>

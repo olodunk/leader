@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>系统提示</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/tabler.min.css') }}">
+</head>
+
+<body class="border-top-wide border-primary d-flex flex-column">
+    <div class="page page-center">
+        <div class="container-tight py-4">
+            <div class="empty">
+                <div class="empty-header">提示</div>
+                <p class="empty-title">无法访问</p>
+                <p class="empty-subtitle text-muted">
+                    {{ msg }}
+                </p>
+                <div class="empty-action">
+                    <a href="{{ url_for('index') }}" class="btn btn-primary">
+                        返回首页
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+
+</html>

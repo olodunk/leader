@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+
+{% block title %}中层干部测评打分对应配置{% endblock %}
+
+{% block content %}
+<div class="page-header d-print-none">
+    <div class="container-xl">
+        <div class="row g-2 align-items-center">
+            <div class="col">
+                <h2 class="page-title">
+                    中层干部测评打分对应配置
+                </h2>
+                <div class="text-secondary mt-1">
+                    请勾选“考核人”是否有权限对“被考核人”群体进行民主测评。勾选表示允许，留空表示禁止。
+                </div>
+            </div>
+            <div class="col-auto ms-auto d-print-none">
+                <div class="btn-list">
+                    <button class="btn btn-primary d-none d-sm-inline-block" onclick="saveConfig()">
+                        <i class="ti ti-device-floppy"></i>
+                        保存配置
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="page-body">
+    <div class="container-xl">
+        <div class="card">
+            <div class="table-responsive" style="max-height: 70vh; position: relative;">
+                <table class="table table-vcenter card-table table-bordered table-hover text-nowrap sticky-headers">
+                    <thead>
+                        <tr>
+                            <th class="w-1 sticky-col-start bg-light fw-bold" style="min-width: 180px; z-index: 20;">考核人
+                                \ 被考核人</th>
+                            {% for col in col_headers %}
+                            <th class="text-center bg-light fw-bold" style="min-width: 100px;">{{ col }}</th>
+                            {% endfor %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for rater in row_headers %}
+                        <tr>
+                            <td class="sticky-col-start bg-light fw-bold">{{ rater }}</td>
+                            {% for examinee in col_headers %}
+                            {% set allowed = config_map.get(examinee, {}).get(rater, 0) %}
+                            <td class="text-center p-0 class-selector-cell" onclick="toggleCell(this)"
+                                style="cursor: pointer; transition: background 0.1s;">
+
+                                <div class="form-check d-flex justify-content-center align-items-center m-0"
+                                    style="height: 100%; width: 100%; min-height: 40px;">
+                                    <input class="form-check-input m-0 config-checkbox" type="checkbox"
+                                        data-rater="{{ rater }}" data-examinee="{{ examinee }}" {% if allowed==1
+                                        %}checked{% endif %} onclick="event.stopPropagation()">
+                                </div>
+                            </td>
+                            {% endfor %}
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    /* Sticky Headers implementation */
+    .sticky-headers thead th {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        box-shadow: 0 1px 0 #e6e7e9;
+    }
+
+    .sticky-col-start {
+        position: sticky;
+        left: 0;
+        z-index: 10;
+        box-shadow: 1px 0 0 #e6e7e9;
+    }
+
+    /* Intersection gets highest z-index */
+    .sticky-headers thead th.sticky-col-start {
+        z-index: 30 !important;
+    }
+
+    /* Hover effect for cleaner grid interaction */
+    .class-selector-cell:hover {
+        background-color: #f0f4f8 !important;
+    }
+</style>
+
+<script>
+    function toggleCell(td) {
+        const checkbox = td.querySelector('input[type="checkbox"]');
+        checkbox.checked = !checkbox.checked;
+    }
+
+    function saveConfig() {
+        const changes = [];
+        document.querySelectorAll('.config-checkbox').forEach(cb => {
+            changes.push({
+                rater_role: cb.dataset.rater,
+                examinee_role: cb.dataset.examinee,
+                is_allowed: cb.checked ? 1 : 0
+            });
+        });
+
+        if (changes.length === 0) return;
+
+        fetch('/api/admin/democratic-config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ updates: changes })
+        })
+            .then(r => r.json())
+            .then(d => {
+                if (d.success) {
+                    alert('保存成功！');
+                } else {
+                    alert('保存失败: ' + d.msg);
+                }
+            })
+            .catch(err => {
+                console.error(err);
+                alert('网络错误');
+            });
+    }
+</script>
+{% endblock %}

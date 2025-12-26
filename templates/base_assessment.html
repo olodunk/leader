@@ -78,6 +78,32 @@
                         </li>
                         {% endif %}
 
+                        {# Project 3: Democratic Evaluation (Dropdown) #}
+                        {% if democratic_nav_items %}
+                        <li
+                            class="nav-item dropdown {% if request.endpoint == 'assessment_democratic' %}active{% endif %}">
+                            <a class="nav-link dropdown-toggle" href="#navbar-extra" data-bs-toggle="dropdown"
+                                data-bs-auto-close="false" role="button" aria-expanded="true">
+                                <span class="nav-link-icon d-md-none d-lg-inline-block"><i
+                                        class="ti ti-users-group"></i></span>
+                                <span class="nav-link-title">中层干部民主测评</span>
+                            </a>
+                            <div class="dropdown-menu show">
+                                <div class="dropdown-menu-columns">
+                                    <div class="dropdown-menu-column">
+                                        {% for item in democratic_nav_items %}
+                                        <a class="dropdown-item {% if current_group_key == item.key %}active{% endif %}"
+                                            href="{{ url_for('assessment_democratic', group_key=item.key) }}"
+                                            style="font-size: small;">
+                                            {{ item.title }}
+                                        </a>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                            </div>
+                        </li>
+                        {% endif %}
+
                         {# 后续项目可继续添加 #}
 
                         <li class="nav-item mt-auto">
