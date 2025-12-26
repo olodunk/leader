@@ -89,35 +89,36 @@
                         <td class="text-wrap small" style="max-width: 100px; line-height: 1.2;">{{ m.dept_name }}</td>
 
                         <!-- Scores -->
-                        <td class="p-1"><input type="number" class="form-control text-center px-0 score-input"
-                                name="s_political_ability" value="{{ score_data.get('s_political_ability', '') }}"
+                        <!-- [Req] Default to 10 if no data exits -->
+                         <td class="p-1"><input type="number" class="form-control text-center px-0 score-input"
+                                name="s_political_ability" value="{{ score_data.get('s_political_ability', 10) }}"
                                 min="0" max="10"></td>
                         <td class="p-1"><input type="number" class="form-control text-center px-0 score-input"
-                                name="s_political_perf" value="{{ score_data.get('s_political_perf', '') }}" min="0"
+                                name="s_political_perf" value="{{ score_data.get('s_political_perf', 10) }}" min="0"
                                 max="10"></td>
                         <td class="p-1"><input type="number" class="form-control text-center px-0 score-input"
-                                name="s_party_build" value="{{ score_data.get('s_party_build', '') }}" min="0" max="10">
+                                name="s_party_build" value="{{ score_data.get('s_party_build', 10) }}" min="0" max="10">
                         </td>
                         <td class="p-1"><input type="number" class="form-control text-center px-0 score-input"
-                                name="s_professionalism" value="{{ score_data.get('s_professionalism', '') }}" min="0"
+                                name="s_professionalism" value="{{ score_data.get('s_professionalism', 10) }}" min="0"
                                 max="10"></td>
                         <td class="p-1"><input type="number" class="form-control text-center px-0 score-input"
-                                name="s_leadership" value="{{ score_data.get('s_leadership', '') }}" min="0" max="10">
+                                name="s_leadership" value="{{ score_data.get('s_leadership', 10) }}" min="0" max="10">
                         </td>
                         <td class="p-1"><input type="number" class="form-control text-center px-0 score-input"
-                                name="s_learning_innov" value="{{ score_data.get('s_learning_innov', '') }}" min="0"
+                                name="s_learning_innov" value="{{ score_data.get('s_learning_innov', 10) }}" min="0"
                                 max="10"></td>
                         <td class="p-1"><input type="number" class="form-control text-center px-0 score-input"
-                                name="s_performance" value="{{ score_data.get('s_performance', '') }}" min="0" max="10">
+                                name="s_performance" value="{{ score_data.get('s_performance', 10) }}" min="0" max="10">
                         </td>
                         <td class="p-1"><input type="number" class="form-control text-center px-0 score-input"
-                                name="s_responsibility" value="{{ score_data.get('s_responsibility', '') }}" min="0"
+                                name="s_responsibility" value="{{ score_data.get('s_responsibility', 10) }}" min="0"
                                 max="10"></td>
                         <td class="p-1"><input type="number" class="form-control text-center px-0 score-input"
-                                name="s_style_image" value="{{ score_data.get('s_style_image', '') }}" min="0" max="10">
+                                name="s_style_image" value="{{ score_data.get('s_style_image', 10) }}" min="0" max="10">
                         </td>
                         <td class="p-1"><input type="number" class="form-control text-center px-0 score-input"
-                                name="s_integrity" value="{{ score_data.get('s_integrity', '') }}" min="0" max="10">
+                                name="s_integrity" value="{{ score_data.get('s_integrity', 10) }}" min="0" max="10">
                         </td>
                     </tr>
                     {% endfor %}

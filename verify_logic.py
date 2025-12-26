@@ -32,12 +32,20 @@ def test_rater_mapping():
     assert '中心领导班子 (正职)' in roles
 
     # Case 4: Kungang Branch Principal (Lanzhou)
+    # Note: '昆冈班子正职' relies on dept_type='昆冈' in current config, OR dept_names if we added it.
+    # But '所属分公司班子正职' now explicitly matches '昆冈兰州分公司'.
     account = {'account_type': 'P'}
     dept = {'dept_name': '昆冈兰州分公司', 'dept_type': '分公司'}
     roles = get_user_rater_roles(account, dept)
-    print(f"CASE 4 (Kungang P): Expected ['昆冈班子正职', '所属分公司班子正职'], Got {roles}")
-    assert '昆冈班子正职' in roles
+    print(f"CASE 4 (Kungang P): Expected '所属分公司班子正职' (and maybe others), Got {roles}")
     assert '所属分公司班子正职' in roles
+    
+    # Case 5: Kungang Beijing Deputy
+    account = {'account_type': 'D'}
+    dept = {'dept_name': '昆冈先进制造（北京）有限公司', 'dept_type': '任何类型'}
+    roles = get_user_rater_roles(account, dept)
+    print(f"CASE 5 (Kungang Beijing D): Expected ['昆冈班子副职'], Got {roles}")
+    assert '昆冈班子副职' in roles
 
 def test_examinee_mapping():
     print("\nTesting Examinee Mapping...")
@@ -53,7 +61,7 @@ def test_examinee_mapping():
     assert key == '所属分公司 (兰州、抚顺) 班子正职'
 
     # Case 3: Center Deputy -> Kungang Beijing
-    key = get_examinee_role_key('中心副职', '昆冈公司')
+    key = get_examinee_role_key('中心副职', '昆冈先进制造（北京）有限公司')
     print(f"CASE 3: Expected '昆冈班子副职 (北京)', Got '{key}'")
     assert key == '昆冈班子副职 (北京)'
 

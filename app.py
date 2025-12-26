@@ -866,6 +866,48 @@ DEFAULT_DEPT_WEIGHTS = {
     }
 }
 
+# Democratic Assessment Permission Config (Independent of Weights)
+# Format: Examinee Role -> List of Allowed Rater Roles
+DEFAULT_DEMOCRATIC_CONFIG = {
+    '院长助理': ['院领导', '职能部门正职 (含院长助理)', '研究所正职', '中心领导班子 (正职)'],
+    '职能部门正职': ['院领导', '职能部门正职 (含院长助理)', '职能部门副职', '职能部门其他员工', '研究所正职', '中心领导班子 (正职)'],
+    '职能部门副职': ['院领导', '职能部门正职 (含院长助理)', '职能部门副职', '职能部门其他员工'],
+    
+    # [Updated] Institute Rules
+    '研究所正职': [
+        '院领导', '职能部门正职 (含院长助理)', '研究所其他员工',
+        '研究所正职', # Mutual
+        '研究所副职'  # Deputy rates Principal
+    ],
+    '研究所副职': [
+        '院领导', '研究所其他员工',
+        '研究所正职', # Principal rates Deputy
+        '研究所副职'  # Mutual
+    ],
+    
+    '两中心正职': ['院领导', '职能部门正职 (含院长助理)', '中心领导班子 (正职)', '职工代表中基层领导人员 (两中心)', '其他职工代表 (两中心)'],
+    '两中心副职': ['院领导', '中心领导班子 (正职)', '中心领导班子 (副职)', '职工代表中基层领导人员 (两中心)', '其他职工代表 (两中心)'],
+    
+    '昆冈班子副职 (北京)': [
+        '院领导', '职能部门正职 (含院长助理)', 
+        '昆冈班子正职', '昆冈班子副职', 
+        '所属分公司班子正职', 
+        '职工代表中基层领导人员 (昆冈北京)'
+    ],
+    
+    '所属分公司 (兰州、抚顺) 班子正职': [
+        '院领导', '职能部门正职 (含院长助理)', 
+        '昆冈班子正职', '昆冈班子副职', 
+        '所属分公司班子副职', 
+        '职工代表中基层领导人员 (分公司)', '其他职工代表 (分公司)'
+    ],
+    '所属分公司 (兰州、抚顺) 班子副职': [
+        '昆冈班子正职', '昆冈班子副职', 
+        '所属分公司班子正职', '所属分公司班子副职', 
+        '职工代表中基层领导人员 (分公司)', '其他职工代表 (分公司)'
+    ]
+}
+
 ROW_HEADERS = [
     '院领导', '职能部门正职 (含院长助理)', '职能部门副职', '职能部门其他员工',
     '研究所正职', '研究所副职', '研究所其他员工',
@@ -917,16 +959,25 @@ RATER_RULES = {
     '研究所其他员工': [{'dept_type': '研究所', 'types': ['E', '员工']}],
     
     # 8-9. 两中心
-    '中心领导班子 (正职)': [{'dept_type': '两中心', 'types': ['P', '正职']}],
-    '中心领导班子 (副职)': [{'dept_type': '两中心', 'types': ['D', '副职']}],
+    '中心领导班子 (正职)': [
+        {'dept_type': '两中心', 'types': ['P', '正职']},
+        {'dept_codes': ['X', 'Y'], 'types': ['P', '正职']}
+    ],
+    '中心领导班子 (副职)': [
+        {'dept_type': '两中心', 'types': ['D', '副职']},
+        {'dept_codes': ['X', 'Y'], 'types': ['D', '副职']}
+    ],
     
     # 10-11. 昆冈
     '昆冈班子正职': [{'dept_type': '昆冈', 'types': ['P', '正职']}],
-    '昆冈班子副职': [{'dept_type': '昆冈', 'types': ['D', '副职']}],
+    '昆冈班子副职': [
+        {'dept_type': '昆冈', 'types': ['D', '副职']},
+        {'dept_names': ['昆冈先进制造（北京）有限公司'], 'types': ['D', '副职']}
+    ],
     
     # 12-13. 分公司 (兰州/抚顺)
-    '所属分公司班子正职': [{'dept_names': ['兰州分公司', '抚顺分公司'], 'types': ['P', '正职']}],
-    '所属分公司班子副职': [{'dept_names': ['兰州分公司', '抚顺分公司'], 'types': ['D', '副职']}],
+    '所属分公司班子正职': [{'dept_names': ['昆冈兰州分公司', '昆冈抚顺分公司'], 'types': ['P', '正职']}],
+    '所属分公司班子副职': [{'dept_names': ['昆冈兰州分公司', '昆冈抚顺分公司'], 'types': ['D', '副职']}],
     
     # 14-19. 职工代表
     '职工代表中基层领导人员 (两中心)': [{'dept_type': '两中心', 'types': ['C', '职工代表']}], 
@@ -977,10 +1028,10 @@ def get_user_rater_roles(user_account, user_dept_info):
     """
     matched_roles = []
     
-    acc_type = user_account.get('account_type', '')
-    d_name = user_dept_info.get('dept_name', '')
-    d_type = user_dept_info.get('dept_type', '')
-    d_code = user_dept_info.get('dept_code', '') # Add dept_code support
+    acc_type = user_account.get('account_type', '').strip()
+    d_name = user_dept_info.get('dept_name', '').strip()
+    d_type = user_dept_info.get('dept_type', '').strip()
+    d_code = user_dept_info.get('dept_code', '').strip()
     
     for rater_role, rules_list in RATER_RULES.items():
         # Special handling for '职能部门其他员工'
@@ -1057,6 +1108,21 @@ def get_examinee_role_key(person_role, dept_name):
     """
     根据中层人员的“角色”和“部门”，识别其对应的权重表列头 (Column Header)
     """
+    if not person_role: return None
+    person_role = person_role.strip()
+    
+    # DEBUG
+    if '基层' in person_role:
+        print(f"DEBUG EXCLUSION MATCH: {person_role}")
+    else:
+        # Check against known problematic user
+        if 'Zhang' in person_role or len(person_role) > 0:
+             print(f"DEBUG ROLE CHECK: '{person_role}' (Contains '基层'? {'基层' in person_role})")
+
+    # [Exclusion] Grassroots leaders should NOT be examinees (Global Check)
+    if '基层' in person_role: 
+        return 'EXCLUDED'
+
     # 1. 直接匹配基础角色
     if person_role in ['院长助理', '职能部门正职', '职能部门副职', '研究所正职', '研究所副职']:
         return person_role
@@ -1066,9 +1132,10 @@ def get_examinee_role_key(person_role, dept_name):
         if dept_name in ['兰州化工研究中心', '大庆化工研究中心']:
             if '正职' in person_role: return '两中心正职'
             if '副职' in person_role: return '两中心副职'
+            if '副职' in person_role: return '两中心副职'
             
         # 3. 复合角色：昆冈 (北京)
-        if dept_name == '昆冈公司':
+        if dept_name == '昆冈先进制造（北京）有限公司':
             if '副职' in person_role: return '昆冈班子副职 (北京)'
             
         # 4. 复合角色：分公司 (兰州/抚顺)
@@ -1297,7 +1364,15 @@ def assessment_personnel():
         return render_template('assessment_error.html', msg="该部门无优秀评选名额，无需进行此项考核。")
 
     # 2. Get Examinees (Principals & Deputies of this Dept)
-    managers = db.execute('SELECT * FROM middle_managers WHERE dept_code=? ORDER BY sort_no ASC', (dept_code,)).fetchall()
+    raw_managers = db.execute('SELECT * FROM middle_managers WHERE dept_code=? ORDER BY sort_no ASC', (dept_code,)).fetchall()
+    managers = []
+    for m in raw_managers:
+        # [Exclusion] Grassroots leaders check
+        # Use simple string check to ensure consistency with Global Rule
+        r_name = m['role'] or ''
+        if '基层' in r_name:
+            continue
+        managers.append(m)
     
     # 3. Get Existing Scores
     existing_rows = db.execute('SELECT * FROM personnel_scores WHERE rater_account=? AND target_dept_code=?', 
@@ -1677,6 +1752,21 @@ def assessment_democratic(group_key):
     
     if not user_row: return "无效账号", 403
     
+    full_user_for_roles = dict(user_row) # helper
+    raw_roles = get_user_rater_roles(full_user_for_roles, full_user_for_roles)
+    
+    # [Fix for KP001]: Apply Split Logic similar to get_democratic_nav
+    # Because democratic_rating_config uses split keys (functional vs assistant), but RATER_RULES returns combined.
+    my_rater_roles = []
+    for r in raw_roles:
+        if r == '职能部门正职 (含院长助理)':
+            if user_row['dept_name'] == '院长助理' or user_row['dept_code'] == 'A0':
+                my_rater_roles.append('院长助理')
+            else:
+                my_rater_roles.append('职能部门正职')
+        else:
+            my_rater_roles.append(r)
+    
     # 1. Validation: Is this group_key allowed for me?
     nav_items = get_democratic_nav(user_row)
     target_group = next((g for g in nav_items if g['key'] == group_key), None)
@@ -1710,29 +1800,50 @@ def assessment_democratic(group_key):
     for r in effective_roles:
         if r == '两中心正职': db_roles.append('中心正职')
         elif r == '两中心副职': db_roles.append('中心副职')
+        elif r == '所属分公司 (兰州、抚顺) 班子正职': db_roles.append('中心正职')
+        elif r == '所属分公司 (兰州、抚顺) 班子副职': db_roles.append('中心副职')
+        elif r == '昆冈班子副职 (北京)': db_roles.append('中心副职')
         else: db_roles.append(r)
         
     ph = ','.join(['?'] * len(db_roles))
     
     # Fetch all candidates in these roles
-    mgrs = db.execute(f'SELECT * FROM middle_managers WHERE role IN ({ph}) ORDER BY sort_no ASC', db_roles).fetchall()
+    mgrs = db.execute(f'SELECT * FROM middle_managers WHERE role IN ({ph}) ORDER BY dept_code ASC, sort_no ASC', db_roles).fetchall()
     
-    full_user_for_roles = dict(user_row) # helper
-    my_rater_roles = get_user_rater_roles(full_user_for_roles, full_user_for_roles)
     is_kungang_rater = any(r in ['昆冈班子正职', '昆冈班子副职', '所属分公司班子正职'] for r in my_rater_roles)
     is_college_leader = (user_row['dept_type'] == '院领导')
     
     valid_members = []
     for m in mgrs:
         c_role = m['role']
-        c_dept = m['dept_code']
+        c_dept = m['dept_code'] # Use code or dept_name
+        # Careful: get_examinee_role_key uses dept_name. 
+        # m['dept_name'] is available from SELECT *? Yes, middle_managers has it.
+        c_dept_name = m['dept_name']
         
+        # [Fix for College Leader Issue]: 
+        # Even if 'center_deputy' is in db_roles, we must ensure THIS specific person maps to an allowed role.
+        # e.g. 'Center Deputy' + 'Lanzhou Branch' -> 'Branch Deputy' (which might NOT be allowed for College Leader)
+        
+        derived_role = get_examinee_role_key(c_role, c_dept_name)
+        
+        # [V5 Fix] Explicit Exclusion Check
+        if derived_role == 'EXCLUDED':
+            continue
+            
+        if not derived_role: derived_role = c_role # Fallback
+        
+        # Check if derived_role is in the Whitelist (allowed_set) AND in the Target Group (effective_roles)
+        # Actually effective_roles is already intersect(target_group, allowed_set).
+        # So we just check effective_roles.
+        if derived_role not in effective_roles:
+            continue
+            
         # Exclusion 1: Same Dept (unless Leader)
         if not is_college_leader and c_dept == user_row['dept_code']:
             continue
             
         # Exclusion 2: KunGang Rater -> Exclude KunGang Deputy (Beijing)
-        # (Even if role matches group, exclude specific person/role combo)
         if is_kungang_rater and c_role == '昆冈班子副职 (北京)':
             continue
             
@@ -1772,30 +1883,51 @@ def submit_democratic_score():
     rater_account = session.get('assessor_username')
     db = get_db()
     
+    # Dimensions
+    dims = ['s_political_ability', 's_political_perf', 's_party_build', 's_professionalism', 
+            's_leadership', 's_learning_innov', 's_performance', 's_responsibility', 
+            's_style_image', 's_integrity']
+
+    # ---------------------------
+    # Global Validation
+    # ---------------------------
+    # Requirement: At least one score must NOT be 10 across the entire submission
+    has_non_ten = False
+    
+    for item in data_list:
+        scores = item.get('scores', {})
+        for d in dims:
+            try:
+                val = float(scores.get(d, 0))
+            except (ValueError, TypeError):
+                return jsonify({'success': False, 'msg': '分数格式错误'})
+                
+            if val < 0 or val > 10: 
+                return jsonify({'success': False, 'msg': '分数必须在 0-10 之间'})
+            
+            if val != 10:
+                has_non_ten = True
+                
+    if not has_non_ten:
+        return jsonify({'success': False, 'msg': '无效提交：所有评分均为10分。请至少对某一项给出非10分的评价。'})
+
+    # ---------------------------
+    # Save to DB
+    # ---------------------------
     try:
         cur = db.cursor()
-        
-        # 10 Dimensions
-        dims = ['s_political_ability', 's_political_perf', 's_party_build', 's_professionalism', 
-                's_leadership', 's_learning_innov', 's_performance', 's_responsibility', 
-                's_style_image', 's_integrity']
 
         for item in data_list:
             examinee_id = item.get('id')
             role = item.get('role') # Passed from frontend for convenience
             scores = item.get('scores', {})
             
-            # Validation: Simple range check
-            # User didn't specify strict logic for this project like Proj 2 (count limits).
-            # Assuming just value inputs 0-10.
-            
             score_vals = []
             total = 0
             for d in dims:
                 val = float(scores.get(d, 0))
-                if val < 0 or val > 10: raise ValueError(f"分数必须在 0-10 之间")
                 score_vals.append(val)
-                total += val # Simple Sum? Or Weighted? Plan said "Assuming sum"
+                total += val 
             
             # Save (UPSERT)
             exist = cur.execute('SELECT id FROM democratic_scores WHERE rater_account=? AND examinee_id=?',

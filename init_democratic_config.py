@@ -1,5 +1,5 @@
 import sqlite3
-from app import app, DATABASE, COL_HEADERS, ROW_HEADERS
+from app import app, DATABASE, COL_HEADERS, ROW_HEADERS, DEFAULT_DEMOCRATIC_CONFIG
 
 def init_democratic_config():
     with app.app_context():
@@ -18,32 +18,26 @@ def init_democratic_config():
             )
         ''')
         
-        # Check if already populated
-        cnt = cursor.execute('SELECT count(*) FROM democratic_rating_config').fetchone()[0]
-        if cnt > 0:
-            print(f"Table democratic_rating_config already has {cnt} rows. Resetting...")
-            cursor.execute('DELETE FROM democratic_rating_config')
-            cursor.execute("DELETE FROM sqlite_sequence WHERE name='democratic_rating_config'")
-            conn.commit()
+        # Always reset since user requested independent config
+        print(f"Resetting democratic_rating_config...")
+        cursor.execute('DELETE FROM democratic_rating_config')
+        cursor.execute("DELETE FROM sqlite_sequence WHERE name='democratic_rating_config'")
+        conn.commit()
 
-        print("Initializing from weight_config_dept...")
+        print("Initializing from DEFAULT_DEMOCRATIC_CONFIG (Independent)...")
         
-        # Logic: Read weight matrix. If weight > 0 -> is_allowed=1. Else 0.
-        # We also need to cover ALL cells in the matrix (Col * Row) to ensure the UI renders correctly.
-        # So we iterate COL_HEADERS and ROW_HEADERS, query weight, and insert.
-        
-        # Get Weights Map
-        weights_rows = cursor.execute('SELECT examinee_role, rater_role, weight FROM weight_config_dept').fetchall()
-        weight_map = {}
-        for r in weights_rows:
-            weight_map[(r[0], r[1])] = r[2]
-            
         data = []
-        for col in COL_HEADERS:
-            for row in ROW_HEADERS:
-                w = weight_map.get((col, row), 0)
-                is_allowed = 1 if w > 0 else 0
-                data.append((col, row, is_allowed))
+        for examinee, raters in DEFAULT_DEMOCRATIC_CONFIG.items():
+            for rater in raters:
+                # is_allowed = 1 for explicitly listed pairs
+                data.append((examinee, rater, 1))
+                
+        # Also need to ensure ROW_HEADERS x COL_HEADERS coverage? 
+        # The previous logic covered ALL pairs with 0 or 1.
+        # If we only insert 1s, the query `SELECT * FROM ... WHERE is_allowed = 1` works fine.
+        # But if the UI expects a full matrix for rendering checkboxes (if used), we might need 0s.
+        # Assuming current UI/Logic only queries for allowed.
+        # Wait, get_democratic_nav checks `is_allowed=1`. Correct.
         
         cursor.executemany('INSERT INTO democratic_rating_config (examinee_role, rater_role, is_allowed) VALUES (?, ?, ?)', data)
         conn.commit()
