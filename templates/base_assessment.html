@@ -39,7 +39,7 @@
                     data-bs-target="#sidebar-menu"><span class="navbar-toggler-icon"></span></button>
 
                 <h1 class="navbar-brand navbar-brand-autodark">
-                    <a href="/assessment/home"
+                    <a href="{{ url_for('assessment_overview') }}"
                         class="text-decoration-none text-primary d-flex align-items-center gap-2">
                         <i class="ti ti-checklist fs-2"></i><span class="text-dark">测评打分</span>
                     </a>
@@ -48,10 +48,10 @@
                 <div class="collapse navbar-collapse" id="sidebar-menu">
                     <ul class="navbar-nav pt-lg-3">
 
-                        <li class="nav-item {% if request.endpoint == 'assessment_home' %}active{% endif %}">
-                            <a class="nav-link" href="{{ url_for('assessment_home') }}"><span
+                        <li class="nav-item {% if request.endpoint == 'assessment_overview' %}active{% endif %}">
+                            <a class="nav-link" href="{{ url_for('assessment_overview') }}"><span
                                     class="nav-link-icon d-md-none d-lg-inline-block"><i
-                                        class="ti ti-home"></i></span><span class="nav-link-title">测评首页</span></a>
+                                        class="ti ti-home"></i></span><span class="nav-link-title">打分概览</span></a>
                         </li>
 
                         <li class="nav-item">
@@ -124,6 +124,29 @@
                                 <span class="nav-link-icon d-md-none d-lg-inline-block"><i
                                         class="ti ti-thumb-up"></i></span>
                                 <span class="nav-link-title">优秀干部民主推荐-副职</span>
+                            </a>
+                        </li>
+                        {% endif %}
+
+                        {# Project 6: Selection & Appointment (Independent) #}
+                        {% if selection_appointment_enabled %}
+                        <li
+                            class="nav-item {% if request.endpoint == 'assessment_selection_appointment' %}active{% endif %}">
+                            <a class="nav-link" href="{{ url_for('assessment_selection_appointment') }}">
+                                <span class="nav-link-icon d-md-none d-lg-inline-block"><i
+                                        class="ti ti-file-text"></i></span>
+                                <span class="nav-link-title">干部选拔任用工作民主评议表</span>
+                            </a>
+                        </li>
+                        {% endif %}
+
+                        {# Project 7: New Promotion Evaluation #}
+                        {% if new_promotion_enabled %}
+                        <li class="nav-item {% if request.endpoint == 'assessment_new_promotion' %}active{% endif %}">
+                            <a class="nav-link" href="{{ url_for('assessment_new_promotion') }}">
+                                <span class="nav-link-icon d-md-none d-lg-inline-block"><i
+                                        class="ti ti-user-check"></i></span>
+                                <span class="nav-link-title">新提拔任用干部民主评议表</span>
                             </a>
                         </li>
                         {% endif %}

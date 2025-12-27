@@ -301,7 +301,7 @@
             const id = tr.getAttribute('data-id');
             if (!id) return;
             const password = tr.querySelector('input[name="password"]').value;
-            const status = tr.querySelector('input[name="status"]').value;
+            const status = tr.querySelector('[name="status"]').value;
 
             // Should optimize to only send changed, but sending all visible is safer/simpler for now
             updates.push({ id, password, status });

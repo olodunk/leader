@@ -1,0 +1,100 @@
+{% extends 'base_assessment.html' %}
+
+{% block content %}
+<div class="container-xl">
+    <div class="row row-cards">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">打分概览与最终提交</h3>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-3">
+                        <div class="col-12">
+                            <p class="text-muted">请完成以下所有必填项目的打分（点击项目名称可跳转）。全部完成后，点击底部的“最终提交”按钮。</p>
+                        </div>
+                    </div>
+
+                    <div class="list-group list-group-flush mb-4">
+                        {% for prog in projects %}
+                        <div class="list-group-item d-flex justify-content-between align-items-center">
+                            <div class="d-flex align-items-center">
+                                {% if prog.completed %}
+                                <span class="badge bg-success me-3"><i class="ti ti-check"></i></span>
+                                {% else %}
+                                <span class="badge bg-danger me-3"><i class="ti ti-x"></i></span>
+                                {% endif %}
+                                <a href="{{ prog.url }}"
+                                    class="text-decoration-none {% if prog.completed %}text-success{% else %}text-danger fw-bold{% endif %}">
+                                    {{ prog.name }}
+                                </a>
+                            </div>
+                            <div>
+                                {% if prog.completed %}
+                                <span class="text-success">已保存</span>
+                                {% else %}
+                                <span class="text-muted">等待打分</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+
+                    {% if is_submitted %}
+                    <div class="alert alert-success">
+                        <h4 class="alert-title">已完成提交</h4>
+                        <p class="text-muted">您的打分已最终提交，感谢您的参与。</p>
+                    </div>
+                    {% else %}
+                    <div class="d-flex justify-content-center mt-4">
+                        <button id="btn-final-submit" class="btn btn-primary btn-lg" onclick="doFinalSubmit()" {% if not
+                            all_completed %}disabled{% endif %}>
+                            <i class="ti ti-send me-2"></i> 最终提交
+                        </button>
+                    </div>
+                    {% if not all_completed %}
+                    <div class="text-center mt-2 text-danger small">
+                        请完成所有标记为“红叉”的项目后提交
+                    </div>
+                    {% endif %}
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    function doFinalSubmit() {
+        if (!confirm('提交后将无法修改任何评分，是否确认提交？')) return;
+
+        const btn = document.getElementById('btn-final-submit');
+        btn.disabled = true;
+        btn.innerHTML = '提交中...';
+
+        fetch('/api/assessment/final-submit', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert(data.msg);
+                    // Redirect to logout (login page)
+                    window.location.href = '/api/logout?type=assessment';
+                } else {
+                    alert('提交失败：' + data.msg);
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="ti ti-send me-2"></i> 最终提交';
+                }
+            })
+            .catch(err => {
+                alert('系统错误: ' + err);
+                btn.disabled = false;
+                btn.innerHTML = '<i class="ti ti-send me-2"></i> 最终提交';
+            });
+    }
+</script>
+{% endblock %}

@@ -7,9 +7,14 @@
             <h2 class="page-title">{{ page_title }}</h2>
         </div>
         <div class="col-auto ms-auto">
-            <button class="btn btn-primary" onclick="submitScores()">
-                <i class="ti ti-send me-2"></i>提交评分
-            </button>
+            <div class="col-auto ms-auto">
+                <a href="{{ url_for('assessment_overview') }}" class="btn btn-secondary me-2">
+                    <i class="ti ti-arrow-left me-2"></i>返回概览
+                </a>
+                <button class="btn btn-primary" onclick="submitScores()">
+                    <i class="ti ti-device-floppy me-2"></i>保存
+                </button>
+            </div>
         </div>
     </div>
 
@@ -90,7 +95,7 @@
 
                         <!-- Scores -->
                         <!-- [Req] Default to 10 if no data exits -->
-                         <td class="p-1"><input type="number" class="form-control text-center px-0 score-input"
+                        <td class="p-1"><input type="number" class="form-control text-center px-0 score-input"
                                 name="s_political_ability" value="{{ score_data.get('s_political_ability', 10) }}"
                                 min="0" max="10"></td>
                         <td class="p-1"><input type="number" class="form-control text-center px-0 score-input"
@@ -282,7 +287,7 @@
             return;
         }
 
-        if (!confirm(`即将提交 ${data.length} 人的评分，提交后不可修改（逻辑上可多次提交），确定吗？`)) return;
+        if (!confirm(`即将保存 ${data.length} 人的评分，确定吗？`)) return;
 
         try {
             const res = await fetch('/api/assessment/democratic/submit', {
@@ -292,7 +297,7 @@
             });
             const result = await res.json();
             if (result.success) {
-                alert('提交成功');
+                alert('保存成功');
                 location.reload();
             } else {
                 alert('提交失败: ' + result.msg);

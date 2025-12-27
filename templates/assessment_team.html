@@ -10,8 +10,11 @@
             </div>
         </div>
         <div class="col-auto ms-auto">
+            <a href="{{ url_for('assessment_overview') }}" class="btn btn-secondary me-2">
+                <i class="ti ti-arrow-left me-2"></i>返回概览
+            </a>
             <button class="btn btn-primary" onclick="submitScores()">
-                <i class="ti ti-send me-2"></i>{% if existing_scores %}更新评分{% else %}提交评分{% endif %}
+                <i class="ti ti-device-floppy me-2"></i>保存
             </button>
         </div>
     </div>
@@ -266,7 +269,7 @@
         }
 
         // Confirmation (Update vs Submit)
-        const actionText = '{{ "更新" if existing_scores else "提交" }}';
+        const actionText = '保存';
         if (!confirm(`确认${actionText}本次评分吗？`)) {
             return;
         }

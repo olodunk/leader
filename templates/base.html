@@ -60,7 +60,7 @@
             </li>
 
             {% set import_active = request.endpoint in ['department_config', 'personnel_management',
-            'recommend_principal', 'recommend_deputy'] %}
+            'recommend_principal', 'recommend_deputy', 'center_grassroots_management'] %}
             <li class="nav-item dropdown">
               <a class="nav-link dropdown-toggle {% if import_active %}show{% endif %}" href="#navbar-import"
                 data-bs-toggle="dropdown" data-bs-auto-close="false" role="button"
@@ -77,6 +77,9 @@
 
                     <a class="dropdown-item {% if request.endpoint == 'personnel_management' %}active{% endif %}"
                       href="{{ url_for('personnel_management') }}">中级管理人员</a>
+
+                    <a class="dropdown-item {% if request.endpoint == 'center_grassroots_management' %}active{% endif %}"
+                      href="{{ url_for('center_grassroots_management') }}">中心基层领导</a>
 
                     <a class="dropdown-item {% if request.endpoint == 'recommend_principal' %}active{% endif %}"
                       href="{{ url_for('recommend_principal') }}">正职推荐</a>
