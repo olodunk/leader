@@ -772,7 +772,7 @@ def list_accounts_api():
         FROM evaluation_accounts a 
         LEFT JOIN department_config d ON a.dept_code = d.dept_code 
         {where_str}
-        ORDER BY d.sort_no ASC, d.serial_no ASC, a.username ASC 
+        ORDER BY d.sort_no ASC, d.serial_no ASC, a.id ASC 
         LIMIT ? OFFSET ?
     '''
     
@@ -969,7 +969,10 @@ RATER_RULES = {
     ],
     
     # 10-11. 昆冈
-    '昆冈班子正职': [{'dept_type': '昆冈', 'types': ['P', '正职']}],
+    '昆冈班子正职': [
+        {'dept_type': '昆冈', 'types': ['P', '正职']},
+        {'dept_names': ['昆冈先进制造（北京）有限公司'], 'dept_codes': ['U'], 'types': ['P', '正职']}
+    ],
     '昆冈班子副职': [
         {'dept_type': '昆冈', 'types': ['D', '副职']},
         {'dept_names': ['昆冈先进制造（北京）有限公司'], 'types': ['D', '副职']}
@@ -1730,7 +1733,22 @@ def inject_democratic_nav():
         if d_row: full_row.update(d_row)
         
         nav_items = get_democratic_nav(full_row)
-        return {'democratic_nav_items': nav_items}
+        
+        # [NEW] Recommend Principal Nav Item
+        recommend_principal_enabled = False
+        if d_row and d_row['count_recommend_principal'] and d_row['count_recommend_principal'] >= 1:
+            recommend_principal_enabled = True
+            
+        # [NEW] Recommend Deputy Nav Item
+        recommend_deputy_enabled = False
+        if d_row and d_row['count_recommend_deputy'] and d_row['count_recommend_deputy'] >= 1:
+            recommend_deputy_enabled = True
+
+        return {
+            'democratic_nav_items': nav_items,
+            'recommend_principal_enabled': recommend_principal_enabled,
+            'recommend_deputy_enabled': recommend_deputy_enabled
+        }
     
     return {}
 
@@ -1955,3 +1973,214 @@ def submit_democratic_score():
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
+
+# ==========================================
+# 13. API: 优秀干部民主推荐-正职 (New & Independent)
+# ==========================================
+
+@app.route('/assessment/recommend-principal')
+def assessment_recommend_principal():
+    """优秀干部民主推荐-正职 页面"""
+    if session.get('assessor_role') != 'assessor':
+        return redirect(url_for('index'))
+        
+    rater_account = session.get('assessor_username')
+    db = get_db()
+    
+    # 1. Permission & Config Check
+    user_row = db.execute('''
+        SELECT a.username, a.dept_code, d.dept_name, d.count_recommend_principal
+        FROM evaluation_accounts a
+        LEFT JOIN department_config d ON a.dept_code = d.dept_code
+        WHERE a.username=?
+    ''', (rater_account,)).fetchone()
+    
+    if not user_row: return "无效账号", 403
+    
+    limit_count = user_row['count_recommend_principal'] or 0
+    dept_name = user_row['dept_name']
+    
+    if limit_count < 1:
+        return render_template('assessment_error.html', msg="贵部门无此项推荐名额")
+        
+    # 2. Fetch Candidates (recommend_principal table)
+    # [FILTER] Only show candidates from the same department
+    dept_code = user_row['dept_code']
+    candidates = db.execute('SELECT * FROM recommend_principal WHERE dept_code=? ORDER BY sort_no ASC', (dept_code,)).fetchall()
+    
+    # 3. Fetch Existing Selections
+    recs = db.execute('SELECT examinee_id FROM recommendation_scores_principal WHERE rater_account=?', 
+                      (rater_account,)).fetchall()
+    selected_ids = [r['examinee_id'] for r in recs]
+    
+    page_title = f"{dept_name}优秀干部民主推荐-正职"
+    
+    return render_template('assessment_recommend_principal.html',
+                           page_title=page_title,
+                           limit_count=limit_count,
+                           candidates=candidates,
+                           selected_ids=selected_ids)
+
+@app.route('/api/assessment/recommend-principal/submit', methods=['POST'])
+def submit_recommend_principal():
+    if session.get('assessor_role') != 'assessor':
+        return jsonify({'success': False, 'msg': '未登录'})
+
+    req = request.json
+    selected_ids = req.get('selected_ids', []) # List of IDs
+    
+    rater_account = session.get('assessor_username')
+    db = get_db()
+    
+    # 1. Validation: Limit Check
+    user_row = db.execute('''
+        SELECT a.dept_code, d.count_recommend_principal 
+        FROM evaluation_accounts a
+        LEFT JOIN department_config d ON a.dept_code = d.dept_code
+        WHERE a.username=?
+    ''', (rater_account,)).fetchone()
+    
+    if not user_row: return jsonify({'success': False, 'msg': '账号异常'})
+    
+    limit_count = user_row['count_recommend_principal'] or 0
+    
+    if len(selected_ids) > limit_count:
+        return jsonify({'success': False, 'msg': f'推荐人数超过限制！最多推荐 {limit_count} 人，当前选择了 {len(selected_ids)} 人。'})
+        
+    # 2. Save (Replace All logic)
+    # Since this is a simple "select N from M", we can clear old recommendations for this user and insert new ones.
+    try:
+        cur = db.cursor()
+        
+        # Clear old
+        cur.execute('DELETE FROM recommendation_scores_principal WHERE rater_account=?', (rater_account,))
+        
+        # Insert new
+        dept_code = user_row['dept_code']
+        
+        if selected_ids:
+             # Fetch names for redundancy? Or just IDs. User requirement said "associate personnel info". 
+             # For storage, name might be useful but ID is critical.
+             # Let's fetch names to store them as plan suggested.
+             
+             placeholders = ','.join(['?'] * len(selected_ids))
+             name_map_rows = db.execute(f'SELECT id, name FROM recommend_principal WHERE id IN ({placeholders})', selected_ids).fetchall()
+             name_map = {r['id']: r['name'] for r in name_map_rows}
+             
+             for uid in selected_ids:
+                 uid_int = int(uid)
+                 u_name = name_map.get(uid_int, '')
+                 cur.execute('''
+                    INSERT INTO recommendation_scores_principal (rater_account, target_dept_code, examinee_id, examinee_name, is_recommended)
+                    VALUES (?, ?, ?, ?, 1)
+                 ''', (rater_account, dept_code, uid_int, u_name))
+        
+        db.commit()
+        return jsonify({'success': True, 'msg': '提交成功'})
+        
+    except Exception as e:
+        db.rollback()
+        return jsonify({'success': False, 'msg': str(e)})
+
+# ==========================================
+# 14. API: 优秀干部民主推荐-副职 (New & Independent)
+# ==========================================
+
+@app.route('/assessment/recommend-deputy')
+def assessment_recommend_deputy():
+    """优秀干部民主推荐-副职 页面"""
+    if session.get('assessor_role') != 'assessor':
+        return redirect(url_for('index'))
+        
+    rater_account = session.get('assessor_username')
+    db = get_db()
+    
+    # 1. Permission & Config Check
+    user_row = db.execute('''
+        SELECT a.username, a.dept_code, d.dept_name, d.count_recommend_deputy
+        FROM evaluation_accounts a
+        LEFT JOIN department_config d ON a.dept_code = d.dept_code
+        WHERE a.username=?
+    ''', (rater_account,)).fetchone()
+    
+    if not user_row: return "无效账号", 403
+    
+    limit_count = user_row['count_recommend_deputy'] or 0
+    dept_name = user_row['dept_name']
+    
+    if limit_count < 1:
+        return render_template('assessment_error.html', msg="贵部门无此项推荐名额")
+        
+    # 2. Fetch Candidates (recommend_deputy table)
+    # [FILTER] Only show candidates from the same department
+    dept_code = user_row['dept_code']
+    candidates = db.execute('SELECT * FROM recommend_deputy WHERE dept_code=? ORDER BY sort_no ASC', (dept_code,)).fetchall()
+    
+    # 3. Fetch Existing Selections
+    recs = db.execute('SELECT examinee_id FROM recommendation_scores_deputy WHERE rater_account=?', 
+                      (rater_account,)).fetchall()
+    selected_ids = [r['examinee_id'] for r in recs]
+    
+    page_title = f"{dept_name}优秀干部民主推荐-副职"
+    
+    return render_template('assessment_recommend_deputy.html',
+                           page_title=page_title,
+                           limit_count=limit_count,
+                           candidates=candidates,
+                           selected_ids=selected_ids)
+
+@app.route('/api/assessment/recommend-deputy/submit', methods=['POST'])
+def submit_recommend_deputy():
+    if session.get('assessor_role') != 'assessor':
+        return jsonify({'success': False, 'msg': '未登录'})
+
+    req = request.json
+    selected_ids = req.get('selected_ids', []) # List of IDs
+    
+    rater_account = session.get('assessor_username')
+    db = get_db()
+    
+    # 1. Validation: Limit Check
+    user_row = db.execute('''
+        SELECT a.dept_code, d.count_recommend_deputy 
+        FROM evaluation_accounts a
+        LEFT JOIN department_config d ON a.dept_code = d.dept_code
+        WHERE a.username=?
+    ''', (rater_account,)).fetchone()
+    
+    if not user_row: return jsonify({'success': False, 'msg': '账号异常'})
+    
+    limit_count = user_row['count_recommend_deputy'] or 0
+    
+    if len(selected_ids) > limit_count:
+        return jsonify({'success': False, 'msg': f'推荐人数超过限制！最多推荐 {limit_count} 人，当前选择了 {len(selected_ids)} 人。'})
+        
+    # 2. Save (Replace All logic)
+    try:
+        cur = db.cursor()
+        
+        # Clear old
+        cur.execute('DELETE FROM recommendation_scores_deputy WHERE rater_account=?', (rater_account,))
+        
+        # Insert new
+        dept_code = user_row['dept_code']
+        
+        if selected_ids:
+             placeholders = ','.join(['?'] * len(selected_ids))
+             name_map_rows = db.execute(f'SELECT id, name FROM recommend_deputy WHERE id IN ({placeholders})', selected_ids).fetchall()
+             name_map = {r['id']: r['name'] for r in name_map_rows}
+             
+             for uid in selected_ids:
+                 uid_int = int(uid)
+                 u_name = name_map.get(uid_int, '')
+                 cur.execute('''
+                    INSERT INTO recommendation_scores_deputy (rater_account, target_dept_code, examinee_id, examinee_name, is_recommended)
+                    VALUES (?, ?, ?, ?, 1)
+                 ''', (rater_account, dept_code, uid_int, u_name))
+        
+        db.commit()
+        return jsonify({'success': True, 'msg': '提交成功'})
+        
+    except Exception as e:
+        db.rollback()
+        return jsonify({'success': False, 'msg': str(e)})

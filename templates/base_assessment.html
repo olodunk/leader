@@ -104,6 +104,30 @@
                         </li>
                         {% endif %}
 
+                        {# Project 4: Recommend Principal (Independent) #}
+                        {% if recommend_principal_enabled %}
+                        <li
+                            class="nav-item {% if request.endpoint == 'assessment_recommend_principal' %}active{% endif %}">
+                            <a class="nav-link" href="{{ url_for('assessment_recommend_principal') }}">
+                                <span class="nav-link-icon d-md-none d-lg-inline-block"><i
+                                        class="ti ti-thumb-up"></i></span>
+                                <span class="nav-link-title">优秀干部民主推荐-正职</span>
+                            </a>
+                        </li>
+                        {% endif %}
+
+                        {# Project 5: Recommend Deputy (Independent) #}
+                        {% if recommend_deputy_enabled %}
+                        <li
+                            class="nav-item {% if request.endpoint == 'assessment_recommend_deputy' %}active{% endif %}">
+                            <a class="nav-link" href="{{ url_for('assessment_recommend_deputy') }}">
+                                <span class="nav-link-icon d-md-none d-lg-inline-block"><i
+                                        class="ti ti-thumb-up"></i></span>
+                                <span class="nav-link-title">优秀干部民主推荐-副职</span>
+                            </a>
+                        </li>
+                        {% endif %}
+
                         {# 后续项目可继续添加 #}
 
                         <li class="nav-item mt-auto">

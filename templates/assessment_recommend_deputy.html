@@ -1,0 +1,157 @@
+{% extends "base_assessment.html" %}
+
+{% block content %}
+<div class="container-xl">
+    <!-- Page Header -->
+    <div class="row g-2 align-items-center mb-3">
+        <div class="col">
+            <h2 class="page-title">{{ page_title }}</h2>
+            <div class="text-muted mt-1">
+                请在下方列表中勾选您推荐的人选。
+            </div>
+        </div>
+        <div class="col-auto ms-auto">
+            <button class="btn btn-primary" id="submitBtn" onclick="submitData()">
+                <i class="ti ti-send me-2"></i>提交推荐
+            </button>
+        </div>
+    </div>
+
+    <!-- Alert / Status Bar -->
+    <div class="alert alert-info d-flex align-items-center mb-3" role="alert" id="status-alert">
+        <i class="ti ti-info-circle fs-2 me-2"></i>
+        <div>
+            本部门可推荐名额：<strong class="fs-3">{{ limit_count }}</strong> 人。
+            当前已推荐：<strong class="fs-3" id="selected-count">0</strong> 人。
+            <span id="limit-msg" class="ms-2"></span>
+        </div>
+    </div>
+
+    <!-- Recommendations Table -->
+    <div class="card">
+        <div class="table-responsive">
+            <table class="table table-vcenter table-hover card-table">
+                <thead>
+                    <tr>
+                        <th class="w-1">序号</th>
+                        <th>姓名</th>
+                        <th>性别</th>
+                        <th>现职务</th>
+                        <th>岗位层级</th>
+                        <th>出生年月</th>
+                        <th>文化程度</th>
+                        <th>现职级时间</th>
+                        <th class="text-center w-1">
+                            推荐
+                        </th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for c in candidates %}
+                    <tr onclick="toggleRow('{{ c.id }}')">
+                        <td>{{ c.sort_no }}</td>
+                        <td class="fw-bold">{{ c.name }}</td>
+                        <td>{{ c.gender }}</td>
+                        <td>{{ c.current_position }}</td>
+                        <td>{{ c.rank_level }}</td>
+                        <td>{{ c.birth_date }}</td>
+                        <td>{{ c.education }}</td>
+                        <td>{{ c.rank_time }}</td>
+                        <td class="text-center">
+                            <input type="checkbox" class="form-check-input m-0 align-middle radio-check"
+                                id="check-{{ c.id }}" data-id="{{ c.id }}" data-name="{{ c.name }}" {% if c.id in
+                                selected_ids %}checked{% endif %} onchange="updateCount(event)">
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block script_extra %}
+<script>
+    const limitCount = {{ limit_count }};
+
+    // Toggle checkbox when clicking row
+    function toggleRow(id) {
+        const checkbox = document.getElementById('check-' + id);
+        if (event.target.type !== 'checkbox') {
+            checkbox.checked = !checkbox.checked;
+            updateCount();
+        }
+    }
+
+    function updateCount(e) {
+        if (e) e.stopPropagation();
+
+        const checks = document.querySelectorAll('.radio-check:checked');
+        const count = checks.length;
+
+        const countSpan = document.getElementById('selected-count');
+        const alertBox = document.getElementById('status-alert');
+        const limitMsg = document.getElementById('limit-msg');
+        const btn = document.getElementById('submitBtn');
+
+        countSpan.innerText = count;
+
+        if (count > limitCount) {
+            // Error State
+            alertBox.classList.remove('alert-info', 'alert-success');
+            alertBox.classList.add('alert-danger');
+
+            countSpan.style.color = 'red';
+            limitMsg.innerText = `(已超额 ${count - limitCount} 人！请减少推荐)`;
+            limitMsg.style.color = 'red';
+            limitMsg.style.fontWeight = 'bold';
+        } else {
+            // Normal State
+            alertBox.classList.remove('alert-danger');
+            alertBox.classList.add('alert-info');
+
+            countSpan.style.color = 'inherit';
+            limitMsg.innerText = '';
+            btn.disabled = false;
+        }
+    }
+
+    async function submitData() {
+        const checks = document.querySelectorAll('.radio-check:checked');
+        const selectedIds = Array.from(checks).map(c => c.getAttribute('data-id'));
+
+        if (selectedIds.length > limitCount) {
+            alert(`当前选择 ${selectedIds.length} 人，超过名额限制 ${limitCount} 人，无法提交！`);
+            return;
+        }
+
+        if (!confirm(`您当前选择了 ${selectedIds.length} 人，确认提交推荐结果吗？`)) {
+            return;
+        }
+
+        try {
+            const res = await fetch('/api/assessment/recommend-deputy/submit', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ selected_ids: selectedIds })
+            });
+
+            const data = await res.json();
+            if (data.success) {
+                alert('提交成功！');
+                window.location.reload();
+            } else {
+                alert('提交失败：' + data.msg);
+            }
+        } catch (err) {
+            alert('网络错误：' + err);
+        }
+    }
+
+    // Init
+    document.addEventListener('DOMContentLoaded', () => {
+        updateCount();
+    });
+</script>
+{% endblock %}

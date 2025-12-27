@@ -63,7 +63,8 @@
             'recommend_principal', 'recommend_deputy'] %}
             <li class="nav-item dropdown">
               <a class="nav-link dropdown-toggle {% if import_active %}show{% endif %}" href="#navbar-import"
-                data-bs-toggle="dropdown" role="button" aria-expanded="{{ 'true' if import_active else 'false' }}">
+                data-bs-toggle="dropdown" data-bs-auto-close="false" role="button"
+                aria-expanded="{{ 'true' if import_active else 'false' }}">
                 <span class="nav-link-icon d-md-none d-lg-inline-block"><i
                     class="ti ti-database-import"></i></span><span class="nav-link-title">数据导入</span>
               </a>
@@ -96,10 +97,11 @@
             <li class="nav-item"><a class="nav-link" href="#"><span class="nav-link-icon d-md-none d-lg-inline-block"><i
                     class="ti ti-activity"></i></span><span class="nav-link-title">进度与结果</span></a></li>
 
-            {% set config_active = request.endpoint in ['weight_config_dept'] %}
+            {% set config_active = request.endpoint in ['weight_config_dept', 'democratic_config'] %}
             <li class="nav-item dropdown">
               <a class="nav-link dropdown-toggle {% if config_active %}show{% endif %}" href="#navbar-config"
-                data-bs-toggle="dropdown" role="button" aria-expanded="{{ 'true' if config_active else 'false' }}">
+                data-bs-toggle="dropdown" data-bs-auto-close="false" role="button"
+                aria-expanded="{{ 'true' if config_active else 'false' }}">
                 <span class="nav-link-icon d-md-none d-lg-inline-block"><i class="ti ti-settings"></i></span><span
                   class="nav-link-title">权重配置</span>
               </a>
@@ -113,8 +115,9 @@
             </li>
 
             <li class="nav-item dropdown"><a class="nav-link dropdown-toggle" href="#navbar-stats"
-                data-bs-toggle="dropdown"><span class="nav-link-icon d-md-none d-lg-inline-block"><i
-                    class="ti ti-chart-bar"></i></span><span class="nav-link-title">数据统计</span></a>
+                data-bs-toggle="dropdown" data-bs-auto-close="false"><span
+                  class="nav-link-icon d-md-none d-lg-inline-block"><i class="ti ti-chart-bar"></i></span><span
+                  class="nav-link-title">数据统计</span></a>
               <div class="dropdown-menu">
                 <div class="dropdown-menu-columns">
                   <div class="dropdown-menu-column">
