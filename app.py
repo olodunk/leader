@@ -4162,6 +4162,14 @@ def submit_recommend_principal():
                     VALUES (?, ?, ?, ?, 1)
 
                  ''', (rater_account, dept_code, uid_int, u_name))
+        else:
+             # Case: Empty recommendation (User chose no one)
+             # We must record this submission so status checks pass and it counts as a valid vote (denominator).
+             # We use a sentinel: examinee_id=0, is_recommended=0
+             cur.execute('''
+                INSERT INTO recommendation_scores_principal (rater_account, target_dept_code, examinee_id, examinee_name, is_recommended)
+                VALUES (?, ?, 0, '放弃推荐', 0)
+             ''', (rater_account, dept_code))
 
         
 
@@ -4368,6 +4376,12 @@ def submit_recommend_deputy():
                     VALUES (?, ?, ?, ?, 1)
 
                  ''', (rater_account, dept_code, uid_int, u_name))
+        else:
+             # Case: Empty recommendation (Record sentinel)
+             cur.execute('''
+                INSERT INTO recommendation_scores_deputy (rater_account, target_dept_code, examinee_id, examinee_name, is_recommended)
+                VALUES (?, ?, 0, '放弃推荐', 0)
+             ''', (rater_account, dept_code))
 
         
 
