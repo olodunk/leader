@@ -17,11 +17,21 @@
 
         body {
             font-feature-settings: "cv03", "cv04", "cv11";
+            background-image: url("{{ url_for('static', filename='image/admin_bg.png') }}");
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            background-attachment: fixed;
+        }
+
+        .card {
+            background-color: rgba(255, 255, 255, 0.9) !important;
+            backdrop-filter: blur(5px);
         }
     </style>
 </head>
 
-<body class=" d-flex flex-column">
+<body class=" d-flex flex-column overflow-hidden">
     <div class="page page-center">
         <div class="container container-tight py-4">
             <div class="text-center mb-4">
@@ -50,7 +60,12 @@
                 </div>
             </div>
         </div>
+        <div class="text-center text-muted pb-3 position-absolute bottom-0 start-0 end-0" style="font-size: 0.8rem;">
+            Powered by 数智技术中心
+        </div>
     </div>
+    </div>
+
     <!-- Libs JS -->
     <script src="https://cdn.jsdelivr.net/npm/@tabler/core@latest/dist/js/tabler.min.js"></script>
     <script>
