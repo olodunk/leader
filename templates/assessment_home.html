@@ -2,25 +2,42 @@
 
 {% block content %}
 <div class="container-xl">
-    <div class="row g-2 align-items-center mb-4">
-        <div class="col">
-            <h2 class="page-title">欢迎参加干部测评</h2>
-            <div class="text-muted mt-1">请从左侧菜单选择打分项目进行评价。所有项目评分完成后，请确认提交。</div>
-        </div>
+    <div class="mb-5 mt-3">
+        <h2 class="page-title display-5">操作说明</h2>
     </div>
 
     <div class="row row-cards">
-        <div class="col-md-12">
-            <div class="card card-active">
+        <div class="col-12">
+            <div class="card">
                 <div class="card-body">
-                    <h3 class="card-title">注意事项</h3>
-                    <ul class="list-unstyled space-y-2">
-                        <li><i class="ti ti-check text-success me-2"></i> 请客观、公正地对考核对象进行评价。</li>
-                        <li><i class="ti ti-check text-success me-2"></i> 评分数据实时自动保存，但在点击“提交”前可以反复修改。</li>
-                        <li><i class="ti ti-check text-success me-2"></i> <strong>领导班子综合考核评价</strong>：对所辖范围内的领导班子整体进行打分。
-                        </li>
-                        {# 更多说明... #}
-                    </ul>
+                    <div class="markdown">
+                        <h3 class="mt-4">1. 登录系统</h3>
+                        <p class="fs-3 text-muted">使用分配给您的用户名和密码登录本系统。若您忘记密码，请联系系统管理员重置。</p>
+
+                        <h3 class="mt-4">2. 选择测评项目</h3>
+                        <p class="fs-3 text-muted">登录成功后，您将在左侧导航菜单中看到可用的中层干部测评项目列表，展示内容是您需要参与的所有测评项。</p>
+
+                        <h3 class="mt-4">3. 填写测评评价</h3>
+                        <p class="fs-3 text-muted">每个测评项中都有对应的测评说明，请您认真阅读，并根据您对被测评干部的了解进行客观、公正的评价。</p>
+
+                        <h3 class="mt-4">4. 提交测评结果</h3>
+                        <p class="fs-3 text-muted">在每一项完成测评后，请点击右上角的“保存”按钮进行保存。</p>
+
+                        <h3 class="mt-4">5. 测评结束操作</h3>
+                        <p class="fs-3 text-muted">点击“操作结束”进入最后结果确认页面，确认无误后点击“确认提交”按钮，提交后，您将无法再次修改测评结果。</p>
+
+                        <div class="alert alert-info mt-4" role="alert">
+                            <div class="d-flex">
+                                <div>
+                                    <i class="ti ti-info-circle fs-2 me-2"></i>
+                                </div>
+                                <div>
+                                    <h4 class="alert-title">开始测评</h4>
+                                    <div class="text-muted">请点击左侧列表页中展示的测评项开始测评吧！</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>

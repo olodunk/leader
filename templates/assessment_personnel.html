@@ -1,7 +1,7 @@
 {% extends "base_assessment.html" %}
 
 {% block content %}
-<div class="container-fluid px-4">
+<div class="container-xl">
     <div class="row g-2 align-items-center mb-3">
         <div class="col">
             <h2 class="page-title">领导人员综合考核评价</h2>
@@ -20,17 +20,11 @@
 
     <!-- Dept Info Panel -->
     <div class="card mb-3">
-        <div class="card-body py-2">
-            <div class="row text-center">
-                <div class="col-6 border-end">
-                    <div class="text-muted small">被考核部门</div>
-                    <div class="fw-bold">{{ dept_name }}</div>
-                </div>
-                <div class="col-6">
-                    <div class="text-muted small">可被评为优秀人数</div>
-                    <div class="fw-bold text-azure fs-3">{{ count_excellent }}</div>
-                    <input type="hidden" id="limit_excellent" value="{{ count_excellent }}">
-                </div>
+        <div class="card-header">
+            <h3 class="card-title">被考核部门：{{ dept_name }}</h3>
+            <div class="ms-auto text-muted">
+                可被评为优秀人数：<span class="text-azure fw-bold fs-3">{{ count_excellent }}</span> 人
+                <input type="hidden" id="limit_excellent" value="{{ count_excellent }}">
             </div>
         </div>
     </div>

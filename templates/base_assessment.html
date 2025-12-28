@@ -41,17 +41,17 @@
                 <h1 class="navbar-brand navbar-brand-autodark">
                     <a href="{{ url_for('assessment_overview') }}"
                         class="text-decoration-none text-primary d-flex align-items-center gap-2">
-                        <i class="ti ti-checklist fs-2"></i><span class="text-dark">测评打分</span>
+                        <i class="ti ti-checklist fs-2"></i><span class="text-dark">测评系统</span>
                     </a>
                 </h1>
 
                 <div class="collapse navbar-collapse" id="sidebar-menu">
                     <ul class="navbar-nav pt-lg-3">
 
-                        <li class="nav-item {% if request.endpoint == 'assessment_overview' %}active{% endif %}">
-                            <a class="nav-link" href="{{ url_for('assessment_overview') }}"><span
+                        <li class="nav-item {% if request.endpoint == 'assessment_home' %}active{% endif %}">
+                            <a class="nav-link" href="{{ url_for('assessment_home') }}"><span
                                     class="nav-link-icon d-md-none d-lg-inline-block"><i
-                                        class="ti ti-home"></i></span><span class="nav-link-title">打分概览</span></a>
+                                        class="ti ti-file-info"></i></span><span class="nav-link-title">操作说明</span></a>
                         </li>
 
                         <li class="nav-item">
@@ -150,6 +150,13 @@
                             </a>
                         </li>
                         {% endif %}
+
+                        <li class="nav-item {% if request.endpoint == 'assessment_overview' %}active{% endif %}">
+                            <a class="nav-link" href="{{ url_for('assessment_overview') }}"><span
+                                    class="nav-link-icon d-md-none d-lg-inline-block"><i
+                                        class="ti ti-circle-check"></i></span><span
+                                    class="nav-link-title">操作结束</span></a>
+                        </li>
 
                         {# 后续项目可继续添加 #}
 

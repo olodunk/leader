@@ -5110,80 +5110,48 @@ def check_assessment_progress(user_row):
             add_proj('personnel', '领导人员综合考核评价', 'assessment_personnel', bool(p_row))
 
     # --- 3. Democratic Evaluation (Project 1/3) ---
-    # Logic: Get available groups -> For each group, must have scores?
-    # Simple check: Do 'democratic_scores' exist for this user?
-    # More strict: Count of distinct examinees in DB vs Count of allowed examinees.
-    
-    # Reuse nav logic to see if they have accesses
     nav_items = get_democratic_nav(user_row)
     if nav_items:
-        # User has access to democratic eval
-        # Strict validation: have they rated EVERYONE they can see?
-        # Calculate Total Target Candidates
-        total_targets = 0
+        # Check completion for ALL sub-items (groups)
+        all_subs_done = True
+        target_jump_key = nav_items[0]['key']
+        found_incomplete = False
         
-        # Re-calc allowed roles
-        full_user = dict(user_row) # Helper
-        raw_roles = get_user_rater_roles(full_user, full_user)
-        my_rater_roles = []
-        for r in raw_roles:
-             if r == '职能部门正职 (含院长助理)':
-                 if user_row['dept_name'] == '院长助理' or user_row['dept_code'] == 'A0': my_rater_roles.append('院长助理')
-                 else: my_rater_roles.append('职能部门正职')
-             else: my_rater_roles.append(r)
-             
-        placeholders = ','.join(['?'] * len(my_rater_roles))
-        query = f'SELECT DISTINCT examinee_role FROM democratic_rating_config WHERE rater_role IN ({placeholders}) AND is_allowed = 1'
-        allowed_roles_db = [r[0] for r in db.execute(query, my_rater_roles).fetchall()]
-        allowed_set = set(allowed_roles_db)
+        for item in nav_items:
+            # Check DB for this specific group
+            # match by roles defined in nav_item
+            roles = item.get('roles', [])
+            if not roles:
+                has_score = False
+            else:
+                # Map roles to DB values (Logic copied from assessment_democratic route)
+                db_roles = []
+                for r in roles:
+                    if r == '两中心正职': db_roles.append('中心正职')
+                    elif r == '两中心副职': db_roles.append('中心副职')
+                    elif r == '所属分公司 (兰州、抚顺) 班子正职': db_roles.append('中心正职')
+                    elif r == '所属分公司 (兰州、抚顺) 班子副职': db_roles.append('中心副职')
+                    elif r == '昆冈班子副职 (北京)': db_roles.append('中心副职')
+                    elif r == '昆冈班子正职': db_roles.append('中心正职') # Assuming mapping if exists
+                    else: db_roles.append(r)
+                
+                db_roles = list(set(db_roles)) # Unique
+                
+                placeholders = ','.join(['?'] * len(db_roles))
+                # Check directly in democratic_scores which stores examinee_role (mapped)
+                query = f"SELECT 1 FROM democratic_scores WHERE rater_account=? AND examinee_role IN ({placeholders}) LIMIT 1"
+                params = [rater_account] + db_roles
+                has_score = db.execute(query, params).fetchone()
+            
+            if not has_score:
+                all_subs_done = False
+                if not found_incomplete:
+                    target_jump_key = item['key']
+                    found_incomplete = True
         
-        # Get all mapped db roles
-        target_db_roles = []
-        
-        for g in nav_items:
-            # Logic from assessment_democratic to find effective roles
-            effective = [r for r in g['roles'] if r in allowed_set]
-            
-            # Map to DB values
-            for r in effective:
-                if r == '两中心正职': target_db_roles.append('中心正职')
-                elif r == '两中心副职': target_db_roles.append('中心副职')
-                elif r == '所属分公司 (兰州、抚顺) 班子正职': target_db_roles.append('中心正职')
-                elif r == '所属分公司 (兰州、抚顺) 班子副职': target_db_roles.append('中心副职')
-                elif r == '昆冈班子副职 (北京)': target_db_roles.append('中心副职')
-                else: target_db_roles.append(r)
-        
-        target_db_roles = list(set(target_db_roles)) # Unique
-        
-        if target_db_roles:
-            # Query all candidates
-            ph = ','.join(['?'] * len(target_db_roles))
-            sql = f"SELECT count(*) FROM middle_managers WHERE role IN ({ph})"
-            # Note: We need to apply the specific exclusions (Same Dept, Kungang Branch etc) to be 100% accurate.
-            # This is complex to duplicate perfectly.
-            # Simplified: Check if they have rated *some* number of people?
-            # Or: Check if `democratic_scores` count > 0?
-            # User requirement: "All validation rules".
-            # The most robust way without duplicating 100 lines of logic is to check if count > 0 for now, 
-            # OR trust that the user clicked "Save" on the specific page.
-            # BUT the "Save" is now loose.
-            # Let's check `democratic_scores` count.
-            
-            score_count = db.execute('SELECT count(*) FROM democratic_scores WHERE rater_account=?', (rater_account,)).fetchone()[0]
-            
-            # If they have nav items, they likely have candidates.
-            # If score_count > 0, we mark as check. 
-            # Ideally verify strict count, but `middle_managers` changes dynamically.
-            # Let's assume > 0 is enough for "Completed" in this implementation phase to avoid blocking valid submissions due to logic mismatch.
-            
-            # FIX: Pass group_key to url_for
-            first_key = nav_items[0]['key']
-            add_proj('democratic', '中层干部民主测评', 'assessment_democratic', score_count > 0, group_key=first_key)
-            
-            # Note: The link url likely needs to go to the first group or a landing?
-            # `assessment_democratic` needs group_key. We can use `nav_items[0].key`.
-            if projects and projects[-1]['key'] == 'democratic':
-                 projects[-1]['url'] = url_for('assessment_democratic', group_key=nav_items[0]['key'])
+        # Add single project item, completed only if ALL sub-groups are done
+        # Link jumps to the first incomplete group (or the first group if all done)
+        add_proj('democratic', '中层干部民主测评', 'assessment_democratic', all_subs_done, group_key=target_jump_key)
 
     # --- 4. Recommend Principal (Project 3/Standard) ---
     d_conf = db.execute('SELECT count_recommend_principal FROM department_config WHERE dept_code=?', (dept_code,)).fetchone()

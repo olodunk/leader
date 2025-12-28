@@ -4,9 +4,8 @@
 <div class="container-xl">
     <div class="row g-2 align-items-center mb-3">
         <div class="col">
-            <h2 class="page-title">领导班子综合考核评价表</h2>
+            <h2 class="page-title">领导班子综合考核评价</h2>
             <div class="text-muted mt-1">
-                请根据以下指标对 <strong>{{ session.get('assessor_dept_name', '未知部门') }}</strong> 领导班子进行打分。
             </div>
         </div>
         <div class="col-auto ms-auto">
@@ -44,12 +43,15 @@
             <span class="badge bg-green ms-2">已提交</span>
             {% endif %}
         </div>
+    </div>
+
+    <div class="card mb-3">
         <div class="table-responsive">
             <table class="table table-bordered text-center align-middle mb-0" style="min-width: 1200px;">
                 <thead>
                     <tr class="bg-light">
-                        <th colspan="1">政治建设</th>
-                        <th colspan="4">经营发展</th>
+                        <th colspan="2">政治建设</th>
+                        <th colspan="3">经营发展</th>
                         <th colspan="3">改革创新</th>
                         <th colspan="2">党建工作</th>
                         <th colspan="2">作风建设</th>

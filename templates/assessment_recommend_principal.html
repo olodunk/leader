@@ -6,9 +6,7 @@
     <div class="row g-2 align-items-center mb-3">
         <div class="col">
             <h2 class="page-title">{{ page_title }}</h2>
-            <div class="text-muted mt-1">
-                请在下方列表中勾选您推荐的人选。
-            </div>
+            <div class="text-muted mt-1"></div>
         </div>
         <div class="col-auto ms-auto">
             <a href="{{ url_for('assessment_overview') }}" class="btn btn-secondary me-2">
@@ -21,12 +19,16 @@
     </div>
 
     <!-- Alert / Status Bar -->
-    <div class="alert alert-info d-flex align-items-center mb-3" role="alert" id="status-alert">
-        <i class="ti ti-info-circle fs-2 me-2"></i>
-        <div>
-            本部门可推荐名额：<strong class="fs-3">{{ limit_count }}</strong> 人。
-            当前已推荐：<strong class="fs-3" id="selected-count">0</strong> 人。
-            <span id="limit-msg" class="ms-2"></span>
+    <!-- Status Header -->
+    <div class="card mb-3">
+        <div class="card-header">
+            <h3 class="card-title">推荐情况</h3>
+            <div class="ms-auto text-muted">
+                本部门可推荐名额：<span class="text-azure fw-bold fs-3">{{ limit_count }}</span> 人
+                <span class="mx-2">|</span>
+                当前已推荐：<span class="text-azure fw-bold fs-3" id="selected-count">0</span> 人
+                <span id="limit-msg" class="ms-2"></span>
+            </div>
         </div>
     </div>
 
@@ -53,7 +55,7 @@
                     {% for c in candidates %}
                     <tr onclick="toggleRow('{{ c.id }}')">
                         <td>{{ c.sort_no }}</td>
-                        <td class="fw-bold">{{ c.name }}</td>
+                        <td>{{ c.name }}</td>
                         <td>{{ c.gender }}</td>
                         <td>{{ c.current_position }}</td>
                         <td>{{ c.rank_level }}</td>
