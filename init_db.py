@@ -371,6 +371,23 @@ def upgrade_schema(cursor):
         )
     ''')
 
+    # --------------------------------------------------------
+    # 表 12: 领导班子打分明细表 (team_score_details) - New Snapshot Table
+    # --------------------------------------------------------
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS team_score_details (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            dept_name TEXT,             -- 部门名称
+            dept_code TEXT,             -- 部门代码
+            rater_account TEXT,         -- 打分人账号
+            score REAL DEFAULT 0,       -- 得分
+            sort_no INTEGER DEFAULT 0,  -- 序号
+            
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+
 
     # 2. middle_managers 表新增列
     mgr_cols = [

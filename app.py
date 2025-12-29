@@ -773,9 +773,171 @@ def export_department():
 
 
 # ==========================================
+# 6. API: 领导班子打分明细
+# ==========================================
 
-# 6. API: 人员管理
+@app.route('/team-score-details')
+@admin_required
+def team_score_details():
+    """领导班子打分明细页"""
+    return render_template('team_score_details.html')
 
+@app.route('/api/team-score-details/list')
+@admin_required
+def team_score_details_list():
+    page = int(request.args.get('page', 1))
+    limit = int(request.args.get('limit', 30))
+    dept_name = request.args.get('dept_name', '')
+    dept_code = request.args.get('dept_code', '')
+    
+    offset = (page - 1) * limit
+    db = get_db()
+    
+    where = []
+    params = []
+    
+    if dept_name:
+        where.append("dept_name LIKE ?")
+        params.append(f"%{dept_name}%")
+    if dept_code:
+        where.append("dept_code LIKE ?")
+        params.append(f"%{dept_code}%")
+        
+    where_clause = "WHERE " + " AND ".join(where) if where else ""
+    
+    count = db.execute(f'SELECT count(*) FROM team_score_details {where_clause}', params).fetchone()[0]
+    data = db.execute(f'SELECT * FROM team_score_details {where_clause} ORDER BY sort_no ASC, id ASC LIMIT ? OFFSET ?', params + [limit, offset]).fetchall()
+    
+    return jsonify({'count': count, 'data': [dict(row) for row in data]})
+
+@app.route('/api/team-score-details/calculate', methods=['POST'])
+@admin_required
+def team_score_details_calculate():
+    """一键计算：清空原表，从 team_scores 聚合计算并插入 snapshot"""
+    try:
+        db = get_db()
+        cursor = db.cursor()
+        
+        # 1. Fetch Data
+        sql = '''
+            SELECT 
+                d.dept_name, 
+                t.target_dept_code as dept_code, 
+                t.rater_account, 
+                t.total_score as score,
+                d.sort_no as dept_sort_no,
+                ea.account_type
+            FROM team_scores t
+            LEFT JOIN department_config d ON t.target_dept_code = d.dept_code
+            LEFT JOIN evaluation_accounts ea ON t.rater_account = ea.username
+        '''
+        df = pd.read_sql_query(sql, db)
+        
+        if df.empty:
+            return jsonify({'success': False, 'msg': '无评分数据'})
+
+        # 2. Sorting Logic
+        # Account Type Mapping
+        type_order = {
+            '院领导': 1,
+            '正职': 2,
+            '副职': 3,
+            '中心基层领导': 4,
+            '其他员工': 5
+        } # Fallback for unknown: 99
+        
+        df['type_rank'] = df['account_type'].map(type_order).fillna(99)
+        
+        # Account Number Extraction (Regex)
+        # Extract the trailing numbers from username (e.g. A0L001 -> 001 -> 1)
+        # If no number, use 0
+        df['account_num'] = df['rater_account'].str.extract('(\d+)$').fillna(0).astype(int)
+        
+        # Sort: Dept sort_no ASC, Type Rank ASC, Account Num ASC
+        df.sort_values(by=['dept_sort_no', 'type_rank', 'account_num'], ascending=[True, True, True], inplace=True)
+        
+        # 3. Generate Serial No (1...N)
+        df['sort_no'] = range(1, len(df) + 1)
+        
+        # 4. Insert into snapshot table
+        # Prepare valid columns
+        valid_cols = ['dept_name', 'dept_code', 'rater_account', 'score', 'sort_no']
+        insert_df = df[valid_cols].copy()
+        
+        cursor.execute('DELETE FROM team_score_details')
+        
+        # Bulk Insert
+        data_to_insert = insert_df.to_records(index=False).tolist()
+        cursor.executemany('''
+            INSERT INTO team_score_details (dept_name, dept_code, rater_account, score, sort_no) 
+            VALUES (?, ?, ?, ?, ?)
+        ''', data_to_insert)
+        
+        row_count = cursor.rowcount
+        db.commit()
+        
+        return jsonify({'success': True, 'msg': f'计算完成，已生成 {len(data_to_insert)} 条记录'})
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'msg': str(e)})
+
+@app.route('/api/team-score-details/clear', methods=['POST'])
+@admin_required
+def team_score_details_clear():
+    try:
+        db = get_db()
+        db.execute('DELETE FROM team_score_details')
+        db.commit()
+        return jsonify({'success': True, 'msg': '已清空打分明细'})
+    except Exception as e:
+        return jsonify({'success': False, 'msg': str(e)})
+
+@app.route('/api/team-score-details/save', methods=['POST'])
+@admin_required
+def team_score_details_save():
+    req = request.json
+    if not req or 'data' not in req: return jsonify({'success': False, 'msg': '无数据'})
+    
+    db = get_db()
+    try:
+        cursor = db.cursor()
+        for item in req['data']:
+            cursor.execute('UPDATE team_score_details SET score = ? WHERE id = ?', (item['score'], item['id']))
+        db.commit()
+        return jsonify({'success': True, 'msg': '保存成功'})
+    except Exception as e:
+        return jsonify({'success': False, 'msg': str(e)})
+
+@app.route('/api/team-score-details/export')
+@admin_required
+def team_score_details_export():
+    try:
+        db = get_db()
+        df = pd.read_sql_query("SELECT sort_no, dept_name, dept_code, score, rater_account FROM team_score_details ORDER BY sort_no ASC, id ASC", db)
+        
+        # Resize/Rename columns for user friendliness
+        df.rename(columns={
+            'sort_no': '序号',
+            'dept_name': '部门名称',
+            'dept_code': '部门代码',
+            'score': '得分',
+            'rater_account': '打分人账号'
+        }, inplace=True)
+        
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df.to_excel(writer, index=False, sheet_name='领导班子打分明细')
+            
+        output.seek(0)
+        return send_file(output, as_attachment=True, download_name='领导班子打分明细.xlsx')
+    except Exception as e:
+        return str(e)
+
+
+# ==========================================
+# 7. API: 人员管理 (Renumbered)
 # ==========================================
 
 

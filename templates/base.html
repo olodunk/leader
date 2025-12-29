@@ -119,15 +119,20 @@
               </div>
             </li>
 
-            <li class="nav-item dropdown"><a class="nav-link dropdown-toggle" href="#navbar-stats"
-                data-bs-toggle="dropdown" data-bs-auto-close="false"><span
-                  class="nav-link-icon d-md-none d-lg-inline-block"><i class="ti ti-chart-bar"></i></span><span
-                  class="nav-link-title">数据统计</span></a>
-              <div class="dropdown-menu">
+            {% set stats_active = request.endpoint in ['team_score_details'] %}
+            <li class="nav-item dropdown">
+              <a class="nav-link dropdown-toggle {% if stats_active %}show{% endif %}" href="#navbar-stats"
+                data-bs-toggle="dropdown" data-bs-auto-close="false" role="button"
+                aria-expanded="{{ 'true' if stats_active else 'false' }}">
+                <span class="nav-link-icon d-md-none d-lg-inline-block"><i class="ti ti-chart-bar"></i></span>
+                <span class="nav-link-title">数据统计</span>
+              </a>
+              <div class="dropdown-menu {% if stats_active %}show{% endif %}">
                 <div class="dropdown-menu-columns">
                   <div class="dropdown-menu-column">
                     <a class="dropdown-item" href="#">领导班子汇总得分</a>
-                    <a class="dropdown-item" href="#">领导班子打分明细</a>
+                    <a class="dropdown-item {% if request.endpoint == 'team_score_details' %}active{% endif %}"
+                      href="{{ url_for('team_score_details') }}">领导班子打分明细</a>
                     <a class="dropdown-item" href="#">被考核人汇总得分</a>
                     <a class="dropdown-item" href="#">被考核人打分明细</a>
                     <a class="dropdown-item" href="#">后备干部推荐（正职）汇总</a>
