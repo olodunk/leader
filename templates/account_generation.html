@@ -42,52 +42,21 @@
 {% endblock %}
 
 {% block content %}
-<div class="container-xl">
-    <!-- Search / Filter -->
-    <div class="card mb-3">
-        <div class="card-body">
-            <div class="row g-2">
-                <div class="col-md-3">
-                    <input type="text" id="f-dept-name" class="form-control" placeholder="部门名称 (支持模糊搜索)">
-                </div>
-                <div class="col-md-2">
-                    <select id="f-type" class="form-select">
-                        <option value="">全部类型</option>
-                        <option value="院领导">院领导</option>
-                        <option value="正职">正职</option>
-                        <option value="副职">副职</option>
-                        <option value="中心基层领导">中心基层领导</option>
-                        <option value="其他员工">其他员工</option>
-                    </select>
-                </div>
-                <div class="col-md-3">
-                    <input type="text" id="f-dept-code" class="form-control" placeholder="部门代码">
-                </div>
-                <div class="col-md-2">
-                    <select id="f-status" class="form-select">
-                        <option value="">全部状态</option>
-                        <option value="是">是 (未提交)</option>
-                        <option value="否">否 (已提交)</option>
-                    </select>
-                </div>
-                <div class="col-md-2">
-                    <button class="btn btn-primary w-100" onclick="loadData(1)">
-                        <i class="ti ti-search me-2"></i>查询
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
-
+<div class="container-fluid">
     <!-- Header -->
     <div class="row g-2 align-items-center mb-3">
         <div class="col">
-            <h2 class="page-title">账号生成</h2>
+            <h2 class="page-title">账号管理</h2>
             <div class="text-muted mt-1">共 <span id="total-count">0</span> 个账号 <span id="status-badge"
                     class="badge bg-green-lt ms-2">查看模式</span></div>
         </div>
         <div class="col-auto ms-auto d-print-none">
             <div class="btn-list">
+                <button class="btn btn-white" data-bs-toggle="collapse" data-bs-target="#filter-panel">
+                    <i class="ti ti-filter me-2"></i>筛选
+                </button>
+                <div class="vr mx-2"></div>
+
                 <button class="btn btn-primary" onclick="generateAccounts()">
                     <i class="ti ti-wand me-2"></i>一键生成
                 </button>
@@ -104,6 +73,44 @@
                 <div id="action-group" style="display: none;">
                     <button class="btn btn-ghost-danger me-2" onclick="cancelEdit()">取消</button>
                     <button class="btn btn-primary" onclick="saveData()">保存</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Search / Filter (Collapsible) -->
+    <div class="collapse mb-3" id="filter-panel">
+        <div class="card">
+            <div class="card-body">
+                <div class="row g-2">
+                    <div class="col-md-3">
+                        <input type="text" id="f-dept-name" class="form-control" placeholder="部门名称 (支持模糊搜索)">
+                    </div>
+                    <div class="col-md-2">
+                        <select id="f-type" class="form-select">
+                            <option value="">全部类型</option>
+                            <option value="院领导">院领导</option>
+                            <option value="正职">正职</option>
+                            <option value="副职">副职</option>
+                            <option value="中心基层领导">中心基层领导</option>
+                            <option value="其他员工">其他员工</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <input type="text" id="f-dept-code" class="form-control" placeholder="部门代码">
+                    </div>
+                    <div class="col-md-2">
+                        <select id="f-status" class="form-select">
+                            <option value="">全部状态</option>
+                            <option value="是">是 (未提交)</option>
+                            <option value="否">否 (已提交)</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <button class="btn btn-primary w-100" onclick="loadData(1)">
+                            <i class="ti ti-search me-2"></i>查询
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>

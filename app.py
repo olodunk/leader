@@ -33,6 +33,8 @@ app.secret_key = os.urandom(24)
 # 设置 Session 超过 30 分钟无操作自动失效
 
 app.permanent_session_lifetime = timedelta(minutes=30)
+app.config['TEMPLATES_AUTO_RELOAD'] = True
+app.jinja_env.auto_reload = True
 
 DATABASE = 'evaluation.db'
 

@@ -1,16 +1,16 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="container-xl">
+<div class="container-fluid">
   <div class="row row-cards mb-4">
-      <div class="col-12">
-         <h2 class="page-title">仪表盘</h2>
-         <div class="text-muted mt-1">中层干部测评工作概览</div>
-      </div>
+    <div class="col-12">
+      <h2 class="page-title">仪表盘</h2>
+      <div class="text-muted mt-1">中层干部测评工作概览</div>
+    </div>
   </div>
 
   <div class="row row-deck row-cards">
-    
+
     <div class="col-sm-6 col-lg-3">
       <div class="card">
         <div class="card-body">
@@ -18,7 +18,7 @@
             <div class="subheader">已配置部门</div>
             <div class="ms-auto lh-1">
               <span class="bg-primary-lt p-1 rounded d-inline-flex align-items-center lh-1">
-                   <i class="ti ti-building fs-3"></i>
+                <i class="ti ti-building fs-3"></i>
               </span>
             </div>
           </div>
@@ -26,40 +26,41 @@
             <div class="h1 mb-0 me-2">{{ dept_count }}</div>
             <div class="me-auto">
               <span class="text-green d-inline-flex align-items-center lh-1">
-                 个
+                个
               </span>
             </div>
           </div>
         </div>
       </div>
     </div>
-    
+
     <div class="col-sm-6 col-lg-3">
       <div class="card">
         <div class="card-body">
           <div class="d-flex align-items-center">
             <div class="subheader">被考核人员</div>
             <div class="ms-auto lh-1">
-               <span class="bg-blue-lt p-1 rounded d-inline-flex align-items-center lh-1">
-                  <i class="ti ti-users fs-3"></i>
+              <span class="bg-blue-lt p-1 rounded d-inline-flex align-items-center lh-1">
+                <i class="ti ti-users fs-3"></i>
               </span>
             </div>
           </div>
           <div class="d-flex align-items-baseline">
-            <div class="h1 mb-3 me-2">0</div> <div class="me-auto"><span class="text-muted">人</span></div>
+            <div class="h1 mb-3 me-2">0</div>
+            <div class="me-auto"><span class="text-muted">人</span></div>
           </div>
         </div>
       </div>
     </div>
 
-     <div class="col-sm-6 col-lg-3">
+    <div class="col-sm-6 col-lg-3">
       <div class="card">
         <div class="card-body">
           <div class="d-flex align-items-center">
             <div class="subheader">当前进度</div>
             <div class="ms-auto lh-1">
               <span class="bg-yellow-lt p-1 rounded d-inline-flex align-items-center lh-1">
-                  <i class="ti ti-chart-pie fs-3"></i>
+                <i class="ti ti-chart-pie fs-3"></i>
               </span>
             </div>
           </div>
@@ -80,27 +81,27 @@
         </div>
         <div class="card-body">
           <div class="row">
-             <div class="col-md-4 mb-3">
-                 <a href="{{ url_for('department_config') }}" class="card card-link card-link-pop">
-                    <div class="card-body">
-                        <span class="avatar bg-primary text-white mb-3 rounded">
-                            <i class="ti ti-settings"></i>
-                        </span>
-                        <h3 class="card-title">去配置部门</h3>
-                        <p class="text-muted">导入Excel或手动管理部门及名额。</p>
-                    </div>
-                 </a>
-             </div>
-             <div class="col-md-4 mb-3">
-                <a href="#" class="card card-link card-link-pop">
-                   <div class="card-body">
-                       <span class="avatar bg-green text-white mb-3 rounded">
-                           <i class="ti ti-user-plus"></i>
-                       </span>
-                       <h3 class="card-title">生成账号</h3>
-                       <p class="text-muted">为打分人员批量生成登录凭证。</p>
-                   </div>
-                </a>
+            <div class="col-md-4 mb-3">
+              <a href="{{ url_for('department_config') }}" class="card card-link card-link-pop">
+                <div class="card-body">
+                  <span class="avatar bg-primary text-white mb-3 rounded">
+                    <i class="ti ti-settings"></i>
+                  </span>
+                  <h3 class="card-title">去配置部门</h3>
+                  <p class="text-muted">导入Excel或手动管理部门及名额。</p>
+                </div>
+              </a>
+            </div>
+            <div class="col-md-4 mb-3">
+              <a href="#" class="card card-link card-link-pop">
+                <div class="card-body">
+                  <span class="avatar bg-green text-white mb-3 rounded">
+                    <i class="ti ti-user-plus"></i>
+                  </span>
+                  <h3 class="card-title">生成账号</h3>
+                  <p class="text-muted">为打分人员批量生成登录凭证。</p>
+                </div>
+              </a>
             </div>
           </div>
         </div>

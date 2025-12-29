@@ -3,65 +3,61 @@
 {% block title %}中层干部测评打分对应配置{% endblock %}
 
 {% block content %}
-<div class="page-header d-print-none">
-    <div class="container-xl">
-        <div class="row g-2 align-items-center">
-            <div class="col">
-                <h2 class="page-title">
-                    中层干部测评打分对应配置
-                </h2>
-                <div class="text-secondary mt-1">
-                    请勾选“考核人”是否有权限对“被考核人”群体进行民主测评。勾选表示允许，留空表示禁止。
-                </div>
+<div class="container-fluid">
+    <!-- Header -->
+    <div class="row g-2 align-items-center mb-3">
+        <div class="col">
+            <h2 class="page-title">
+                中层干部测评打分对应配置
+            </h2>
+            <div class="text-muted mt-1">
+                请勾选“考核人”是否有权限对“被考核人”群体进行民主测评。勾选表示允许，留空表示禁止。
             </div>
-            <div class="col-auto ms-auto d-print-none">
-                <div class="btn-list">
-                    <button class="btn btn-primary d-none d-sm-inline-block" onclick="saveConfig()">
-                        <i class="ti ti-device-floppy"></i>
-                        保存配置
-                    </button>
-                </div>
+        </div>
+        <div class="col-auto ms-auto d-print-none">
+            <div class="btn-list">
+                <button class="btn btn-primary d-none d-sm-inline-block" onclick="saveConfig()">
+                    <i class="ti ti-device-floppy"></i>
+                    保存配置
+                </button>
             </div>
         </div>
     </div>
-</div>
 
-<div class="page-body">
-    <div class="container-xl">
-        <div class="card">
-            <div class="table-responsive" style="max-height: 70vh; position: relative;">
-                <table class="table table-vcenter card-table table-bordered table-hover text-nowrap sticky-headers">
-                    <thead>
-                        <tr>
-                            <th class="w-1 sticky-col-start bg-light fw-bold" style="min-width: 180px; z-index: 20;">考核人
-                                \ 被考核人</th>
-                            {% for col in col_headers %}
-                            <th class="text-center bg-light fw-bold" style="min-width: 100px;">{{ col }}</th>
-                            {% endfor %}
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for rater in row_headers %}
-                        <tr>
-                            <td class="sticky-col-start bg-light fw-bold">{{ rater }}</td>
-                            {% for examinee in col_headers %}
-                            {% set allowed = config_map.get(examinee, {}).get(rater, 0) %}
-                            <td class="text-center p-0 class-selector-cell" onclick="toggleCell(this)"
-                                style="cursor: pointer; transition: background 0.1s;">
-
-                                <div class="form-check d-flex justify-content-center align-items-center m-0"
-                                    style="height: 100%; width: 100%; min-height: 40px;">
-                                    <input class="form-check-input m-0 config-checkbox" type="checkbox"
-                                        data-rater="{{ rater }}" data-examinee="{{ examinee }}" {% if allowed==1
-                                        %}checked{% endif %} onclick="event.stopPropagation()">
-                                </div>
-                            </td>
-                            {% endfor %}
-                        </tr>
+    <!-- Content -->
+    <div class="card">
+        <div class="table-responsive" style="max-height: 70vh; position: relative;">
+            <table class="table table-vcenter card-table table-bordered table-hover text-nowrap sticky-headers">
+                <thead>
+                    <tr>
+                        <th class="w-1 sticky-col-start bg-light fw-bold" style="min-width: 180px; z-index: 20;">考核人
+                            \ 被考核人</th>
+                        {% for col in col_headers %}
+                        <th class="text-center bg-light fw-bold" style="min-width: 100px;">{{ col }}</th>
                         {% endfor %}
-                    </tbody>
-                </table>
-            </div>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for rater in row_headers %}
+                    <tr>
+                        <td class="sticky-col-start bg-light fw-bold">{{ rater }}</td>
+                        {% for examinee in col_headers %}
+                        {% set allowed = config_map.get(examinee, {}).get(rater, 0) %}
+                        <td class="text-center p-0 class-selector-cell" onclick="toggleCell(this)"
+                            style="cursor: pointer; transition: background 0.1s;">
+
+                            <div class="form-check d-flex justify-content-center align-items-center m-0"
+                                style="height: 100%; width: 100%; min-height: 40px;">
+                                <input class="form-check-input m-0 config-checkbox" type="checkbox"
+                                    data-rater="{{ rater }}" data-examinee="{{ examinee }}" {% if allowed==1 %}checked{%
+                                    endif %} onclick="event.stopPropagation()">
+                            </div>
+                        </td>
+                        {% endfor %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
         </div>
     </div>
 </div>

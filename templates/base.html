@@ -17,6 +17,8 @@
     body {
       font-feature-settings: "cv03", "cv04", "cv11";
       background-color: #f4f6fa;
+      overflow-y: scroll;
+      /* 强制显示滚动条，防止布局抖动 */
     }
 
     /* 侧边栏激活样式 */
@@ -93,7 +95,7 @@
             <li class="nav-item {% if request.endpoint == 'account_generation' %}active{% endif %}">
               <a class="nav-link" href="{{ url_for('account_generation') }}"><span
                   class="nav-link-icon d-md-none d-lg-inline-block"><i class="ti ti-user-plus"></i></span><span
-                  class="nav-link-title">账号生成</span></a>
+                  class="nav-link-title">账号管理</span></a>
             </li>
 
 

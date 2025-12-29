@@ -1,7 +1,7 @@
 {% extends "base_assessment.html" %}
 
 {% block content %}
-<div class="container-xl">
+<div class="container-fluid">
     <!-- Page Header -->
     <div class="row g-2 align-items-center mb-3">
         <div class="col">
@@ -35,18 +35,18 @@
     <!-- Recommendations Table -->
     <div class="card">
         <div class="table-responsive">
-            <table class="table table-vcenter table-hover card-table">
+            <table class="table table-vcenter table-hover table-bordered card-table" style="min-width: 1200px;">
                 <thead>
                     <tr>
-                        <th class="w-1">序号</th>
-                        <th>姓名</th>
-                        <th>性别</th>
-                        <th>现职务</th>
-                        <th>岗位层级</th>
-                        <th>出生年月</th>
-                        <th>文化程度</th>
-                        <th>现职级时间</th>
-                        <th class="text-center w-1">
+                        <th style="min-width: 60px;">序号</th>
+                        <th style="min-width: 100px;">姓名</th>
+                        <th style="min-width: 60px;">性别</th>
+                        <th style="min-width: 200px;">现职务</th>
+                        <th style="min-width: 100px;">岗位层级</th>
+                        <th style="min-width: 100px;">出生年月</th>
+                        <th style="min-width: 100px;">文化程度</th>
+                        <th style="min-width: 100px;">现职级时间</th>
+                        <th class="text-center" style="min-width: 80px;">
                             推荐
                         </th>
                     </tr>
@@ -105,7 +105,6 @@
         const count = checks.length;
 
         const countSpan = document.getElementById('selected-count');
-        const alertBox = document.getElementById('status-alert');
         const limitMsg = document.getElementById('limit-msg');
         const btn = document.getElementById('submitBtn');
 
@@ -113,23 +112,19 @@
 
         if (count > limitCount) {
             // Error State
-            alertBox.classList.remove('alert-info', 'alert-success');
-            alertBox.classList.add('alert-danger');
+            countSpan.classList.remove('text-azure');
+            countSpan.classList.add('text-danger');
 
-            countSpan.style.color = 'red';
             limitMsg.innerText = `(已超额 ${count - limitCount} 人！请减少推荐)`;
             limitMsg.style.color = 'red';
             limitMsg.style.fontWeight = 'bold';
-
-            // btn.disabled = true; // User requested "cannot submit", disabling is clearest.
         } else {
             // Normal State
-            alertBox.classList.remove('alert-danger');
-            alertBox.classList.add('alert-info');
+            countSpan.classList.remove('text-danger');
+            countSpan.classList.add('text-azure');
 
-            countSpan.style.color = 'inherit';
+            countSpan.style.color = ''; // Reset inline style if any
             limitMsg.innerText = '';
-
             btn.disabled = false;
         }
     }
