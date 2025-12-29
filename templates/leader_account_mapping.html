@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+
+{% block head_extra %}
+<style>
+    .leader-card {
+        text-align: center;
+        padding: 1rem;
+    }
+
+    .leader-name {
+        font-weight: bold;
+        font-size: 1.1rem;
+        margin-bottom: 0.5rem;
+    }
+
+    .account-select {
+        width: 100%;
+        text-align: center;
+    }
+
+    .account-select:disabled {
+        background-color: #f8fafc;
+        border: 1px solid #e6e7e9;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Header & Actions -->
+    <div class="row g-2 align-items-center mb-3">
+        <div class="col">
+            <h2 class="page-title">院领导账号分配</h2>
+            <div class="text-muted mt-1">为 6 位院领导分配打分账号</div>
+        </div>
+
+        <div class="col-auto ms-auto d-print-none">
+            <button id="btn-edit" class="btn btn-primary" onclick="toggleEditMode(true)">
+                <i class="ti ti-pencil me-2"></i>编辑
+            </button>
+            <div id="action-group" style="display: none;">
+                <button class="btn btn-ghost-danger me-2" onclick="cancelEdit()">取消</button>
+                <button class="btn btn-primary" onclick="saveData()">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Leader Cards -->
+    <div class="card">
+        <div class="card-body">
+            <div class="row" id="leader-container">
+                <!-- Loaded via JS -->
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block script_extra %}
+<script>
+    let leaderData = [];
+    let a0Accounts = [];
+
+    document.addEventListener('DOMContentLoaded', async () => {
+        await loadA0Accounts();
+        await loadData();
+    });
+
+    async function loadA0Accounts() {
+        try {
+            const res = await (await fetch('/api/accounts-a0')).json();
+            if (res.success) {
+                a0Accounts = res.data;
+            }
+        } catch (e) {
+            console.error('Failed to load A0 accounts:', e);
+        }
+    }
+
+    async function loadData() {
+        try {
+            const res = await (await fetch('/api/leader-account-mapping/list')).json();
+            if (res.success) {
+                leaderData = res.data;
+                renderLeaders();
+            } else {
+                alert('加载失败: ' + res.msg);
+            }
+        } catch (e) {
+            alert('加载失败: ' + e);
+        }
+    }
+
+    function renderLeaders() {
+        const container = document.getElementById('leader-container');
+        container.innerHTML = leaderData.map(leader => `
+            <div class="col-2 leader-card" data-key="${leader.leader_key}">
+                <div class="leader-name">${leader.leader_name}</div>
+                <select class="form-select account-select" disabled>
+                    <option value="">-- 未分配 --</option>
+                    ${a0Accounts.map(acc => `<option value="${acc}" ${leader.account === acc ? 'selected' : ''}>${acc}</option>`).join('')}
+                </select>
+            </div>
+        `).join('');
+    }
+
+    function toggleEditMode(edit) {
+        document.querySelectorAll('.account-select').forEach(el => el.disabled = !edit);
+        document.getElementById('btn-edit').style.display = edit ? 'none' : 'inline-block';
+        document.getElementById('action-group').style.display = edit ? 'inline-block' : 'none';
+    }
+
+    function cancelEdit() {
+        if (confirm('取消将丢失未保存的修改，确定吗？')) {
+            renderLeaders();
+            toggleEditMode(false);
+        }
+    }
+
+    async function saveData() {
+        const updates = [];
+        document.querySelectorAll('.leader-card').forEach(card => {
+            const key = card.getAttribute('data-key');
+            const name = card.querySelector('.leader-name').innerText;
+            const account = card.querySelector('.account-select').value;
+            updates.push({ leader_key: key, leader_name: name, account: account });
+        });
+
+        try {
+            const res = await (await fetch('/api/leader-account-mapping/save', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ data: updates })
+            })).json();
+
+            alert(res.msg);
+            if (res.success) {
+                toggleEditMode(false);
+                loadData();
+            }
+        } catch (e) {
+            alert('保存失败: ' + e);
+        }
+    }
+</script>
+{% endblock %}

@@ -420,6 +420,38 @@ def upgrade_schema(cursor):
     # 3. democratic_scores 新增 examinee_name
     add_column('democratic_scores', 'examinee_name TEXT')
     
+    # --------------------------------------------------------
+    # 表 14: 院领导权重配置表 (leader_weight_config) - New
+    # --------------------------------------------------------
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS leader_weight_config (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            dept_code TEXT NOT NULL UNIQUE,
+            dept_name TEXT,
+            total_weight REAL DEFAULT 50,   -- 院领导占总比例
+            w_yang_weisheng REAL DEFAULT 0, -- 杨卫胜
+            w_wang_ling REAL DEFAULT 0,     -- 王凌
+            w_xu_qingchun REAL DEFAULT 0,   -- 许青春
+            w_zhao_tong REAL DEFAULT 0,     -- 赵彤
+            w_ge_shaohui REAL DEFAULT 0,    -- 葛少辉
+            w_liu_chaowei REAL DEFAULT 0,   -- 刘超伟
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    
+    # --------------------------------------------------------
+    # 表 15: 院领导账号分配表 (leader_account_mapping) - New
+    # --------------------------------------------------------
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS leader_account_mapping (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            leader_key TEXT NOT NULL UNIQUE,  -- yang_weisheng, wang_ling, etc.
+            leader_name TEXT,                  -- 杨卫胜, 王凌, etc.
+            account TEXT,                      -- 分配的打分账号
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    
     print("数据库结构检查完毕。")
 
 if __name__ == '__main__':

@@ -102,7 +102,8 @@
             <li class="nav-item"><a class="nav-link" href="#"><span class="nav-link-icon d-md-none d-lg-inline-block"><i
                     class="ti ti-activity"></i></span><span class="nav-link-title">进度与结果</span></a></li>
 
-            {% set config_active = request.endpoint in ['weight_config_dept', 'democratic_config'] %}
+            {% set config_active = request.endpoint in ['weight_config_dept', 'democratic_config',
+            'leader_weight_config_page', 'leader_account_mapping_page'] %}
             <li class="nav-item dropdown">
               <a class="nav-link dropdown-toggle {% if config_active %}show{% endif %}" href="#navbar-config"
                 data-bs-toggle="dropdown" data-bs-auto-close="false" role="button"
@@ -115,7 +116,10 @@
                   href="{{ url_for('weight_config_dept') }}">部门权重配置</a>
                 <a class="dropdown-item {% if request.endpoint == 'democratic_config' %}active{% endif %}"
                   href="{{ url_for('democratic_config') }}">中层干部测评打分对应</a>
-                <a class="dropdown-item" href="#">院领导权重配置</a>
+                <a class="dropdown-item {% if request.endpoint == 'leader_weight_config_page' %}active{% endif %}"
+                  href="{{ url_for('leader_weight_config_page') }}">院领导权重配置</a>
+                <a class="dropdown-item {% if request.endpoint == 'leader_account_mapping_page' %}active{% endif %}"
+                  href="{{ url_for('leader_account_mapping_page') }}">院领导账号分配</a>
               </div>
             </li>
 

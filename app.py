@@ -1120,6 +1120,140 @@ def democratic_score_details_save():
 
 
 # ==========================================
+# 6.5. API: 院领导权重配置 (Leader Weight Config)
+# ==========================================
+
+@app.route('/admin/leader-weight-config')
+@admin_required
+def leader_weight_config_page():
+    return render_template('leader_weight_config.html')
+
+@app.route('/api/leader-weight-config/list')
+@admin_required
+def leader_weight_config_list():
+    try:
+        db = get_db()
+        # Only return departments that have been configured in leader_weight_config
+        configs = db.execute('SELECT * FROM leader_weight_config ORDER BY id ASC').fetchall()
+        result = [dict(c) for c in configs]
+        
+        return jsonify({'success': True, 'data': result})
+    except Exception as e:
+        return jsonify({'success': False, 'msg': str(e)})
+
+@app.route('/api/leader-weight-config/save', methods=['POST'])
+@admin_required
+def leader_weight_config_save():
+    try:
+        db = get_db()
+        data = request.json.get('data', [])
+        
+        cursor = db.cursor()
+        for item in data:
+            cursor.execute('''
+                INSERT INTO leader_weight_config 
+                    (dept_code, dept_name, total_weight, w_yang_weisheng, w_wang_ling, w_xu_qingchun, w_zhao_tong, w_ge_shaohui, w_liu_chaowei)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(dept_code) DO UPDATE SET
+                    dept_name=excluded.dept_name,
+                    total_weight=excluded.total_weight,
+                    w_yang_weisheng=excluded.w_yang_weisheng,
+                    w_wang_ling=excluded.w_wang_ling,
+                    w_xu_qingchun=excluded.w_xu_qingchun,
+                    w_zhao_tong=excluded.w_zhao_tong,
+                    w_ge_shaohui=excluded.w_ge_shaohui,
+                    w_liu_chaowei=excluded.w_liu_chaowei,
+                    updated_at=CURRENT_TIMESTAMP
+            ''', (
+                item.get('dept_code'),
+                item.get('dept_name'),
+                item.get('total_weight', 50),
+                item.get('w_yang_weisheng', 0),
+                item.get('w_wang_ling', 0),
+                item.get('w_xu_qingchun', 0),
+                item.get('w_zhao_tong', 0),
+                item.get('w_ge_shaohui', 0),
+                item.get('w_liu_chaowei', 0)
+            ))
+        
+        db.commit()
+        return jsonify({'success': True, 'msg': f'保存成功 ({len(data)} 条)'})
+    except Exception as e:
+        return jsonify({'success': False, 'msg': str(e)})
+
+# ==========================================
+# 6.6. API: 院领导账号分配 (Leader Account Mapping)
+# ==========================================
+
+LEADER_KEYS = [
+    ('yang_weisheng', '杨卫胜'),
+    ('wang_ling', '王凌'),
+    ('xu_qingchun', '许青春'),
+    ('zhao_tong', '赵彤'),
+    ('ge_shaohui', '葛少辉'),
+    ('liu_chaowei', '刘超伟'),
+]
+
+@app.route('/admin/leader-account-mapping')
+@admin_required
+def leader_account_mapping_page():
+    return render_template('leader_account_mapping.html')
+
+@app.route('/api/leader-account-mapping/list')
+@admin_required
+def leader_account_mapping_list():
+    try:
+        db = get_db()
+        mappings = db.execute('SELECT * FROM leader_account_mapping').fetchall()
+        mapping_dict = {m['leader_key']: m['account'] for m in mappings}
+        
+        result = []
+        for key, name in LEADER_KEYS:
+            result.append({
+                'leader_key': key,
+                'leader_name': name,
+                'account': mapping_dict.get(key, '')
+            })
+        
+        return jsonify({'success': True, 'data': result})
+    except Exception as e:
+        return jsonify({'success': False, 'msg': str(e)})
+
+@app.route('/api/leader-account-mapping/save', methods=['POST'])
+@admin_required
+def leader_account_mapping_save():
+    try:
+        db = get_db()
+        data = request.json.get('data', [])
+        
+        cursor = db.cursor()
+        for item in data:
+            cursor.execute('''
+                INSERT INTO leader_account_mapping (leader_key, leader_name, account)
+                VALUES (?, ?, ?)
+                ON CONFLICT(leader_key) DO UPDATE SET
+                    leader_name=excluded.leader_name,
+                    account=excluded.account,
+                    updated_at=CURRENT_TIMESTAMP
+            ''', (item.get('leader_key'), item.get('leader_name'), item.get('account', '')))
+        
+        db.commit()
+        return jsonify({'success': True, 'msg': '保存成功'})
+    except Exception as e:
+        return jsonify({'success': False, 'msg': str(e)})
+
+@app.route('/api/accounts-a0')
+@admin_required
+def get_accounts_a0():
+    try:
+        db = get_db()
+        accounts = db.execute("SELECT username FROM evaluation_accounts WHERE dept_code='A0' ORDER BY username ASC").fetchall()
+        result = [a['username'] for a in accounts]
+        return jsonify({'success': True, 'data': result})
+    except Exception as e:
+        return jsonify({'success': False, 'msg': str(e)})
+
+# ==========================================
 # 7. API: 人员管理 (Renumbered)
 # ==========================================
 
