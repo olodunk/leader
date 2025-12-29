@@ -336,6 +336,7 @@ def upgrade_schema(cursor):
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             rater_account TEXT NOT NULL,
             examinee_id INTEGER NOT NULL,
+            examinee_name TEXT, -- Added for denormalization
             examinee_role TEXT,
             
             s_political_ability REAL DEFAULT 0,
@@ -389,6 +390,24 @@ def upgrade_schema(cursor):
     ''')
 
 
+    # --------------------------------------------------------
+    # 表 13: 被考核人打分明细表 (democratic_score_details) - New Snapshot
+    # --------------------------------------------------------
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS democratic_score_details (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            sort_no INTEGER,            -- 序号
+            name TEXT,                  -- 被考核人姓名
+            dept_name TEXT,             -- 部门名称
+            dept_code TEXT,             -- 部门代码
+            score REAL DEFAULT 0,       -- 得分
+            rater_account TEXT,         -- 打分人账号
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+
+
     # 2. middle_managers 表新增列
     mgr_cols = [
         "dept_code TEXT",
@@ -398,6 +417,9 @@ def upgrade_schema(cursor):
     for col in mgr_cols:
         add_column('middle_managers', col)
         
+    # 3. democratic_scores 新增 examinee_name
+    add_column('democratic_scores', 'examinee_name TEXT')
+    
     print("数据库结构检查完毕。")
 
 if __name__ == '__main__':

@@ -851,7 +851,7 @@ def team_score_details_calculate():
         # Account Number Extraction (Regex)
         # Extract the trailing numbers from username (e.g. A0L001 -> 001 -> 1)
         # If no number, use 0
-        df['account_num'] = df['rater_account'].str.extract('(\d+)$').fillna(0).astype(int)
+        df['account_num'] = df['rater_account'].str.extract(r'(\d+)$').fillna(0).astype(int)
         
         # Sort: Dept sort_no ASC, Type Rank ASC, Account Num ASC
         df.sort_values(by=['dept_sort_no', 'type_rank', 'account_num'], ascending=[True, True, True], inplace=True)
@@ -934,6 +934,189 @@ def team_score_details_export():
         return send_file(output, as_attachment=True, download_name='领导班子打分明细.xlsx')
     except Exception as e:
         return str(e)
+
+# ==========================================
+# 4.2 API: 被考核人打分明细 (Democratic Score Details)
+# ==========================================
+
+@app.route('/admin/democratic-score-details')
+@admin_required
+def democratic_score_details():
+    """被考核人打分明细页"""
+    return render_template('democratic_score_details.html')
+
+@app.route('/api/democratic-score-details/list')
+@admin_required
+def democratic_score_details_list():
+    page = int(request.args.get('page', 1))
+    limit = int(request.args.get('limit', 30))
+    dept_name = request.args.get('dept_name', '')
+    dept_code = request.args.get('dept_code', '')
+    name = request.args.get('name', '')
+    rater_account = request.args.get('rater_account', '')
+    
+    offset = (page - 1) * limit
+    db = get_db()
+    
+    where = []
+    params = []
+    
+    if dept_name:
+        where.append("dept_name LIKE ?")
+        params.append(f"%{dept_name}%")
+    if dept_code:
+        where.append("dept_code LIKE ?")
+        params.append(f"%{dept_code}%")
+    if name:
+        where.append("name LIKE ?")
+        params.append(f"%{name}%")
+    if rater_account:
+        where.append("rater_account LIKE ?")
+        params.append(f"%{rater_account}%")
+        
+    where_clause = "WHERE " + " AND ".join(where) if where else ""
+    
+    count = db.execute(f'SELECT count(*) FROM democratic_score_details {where_clause}', params).fetchone()[0]
+    data = db.execute(f'SELECT * FROM democratic_score_details {where_clause} ORDER BY sort_no ASC, id ASC LIMIT ? OFFSET ?', params + [limit, offset]).fetchall()
+    
+    return jsonify({'count': count, 'data': [dict(row) for row in data]})
+
+@app.route('/api/democratic-score-details/calculate', methods=['POST'])
+@admin_required
+def democratic_score_details_calculate():
+    """一键计算：合并 democratic_scores 和 personnel_scores"""
+    try:
+        db = get_db()
+        cursor = db.cursor()
+        
+        # 1. Fetch Data from both sources
+        sql_democratic = '''
+            SELECT 
+                d.examinee_name as name,
+                m.dept_name,
+                m.dept_code,
+                d.total_score as score,
+                d.rater_account,
+                ea.account_type
+            FROM democratic_scores d
+            JOIN middle_managers m ON d.examinee_id = m.id
+            LEFT JOIN evaluation_accounts ea ON d.rater_account = ea.username
+        '''
+        sql_personnel = '''
+            SELECT 
+                p.examinee_name as name,
+                m.dept_name,
+                m.dept_code,
+                p.total_score as score,
+                p.rater_account,
+                ea.account_type
+            FROM personnel_scores p
+            JOIN middle_managers m ON p.examinee_id = m.id
+            LEFT JOIN evaluation_accounts ea ON p.rater_account = ea.username
+        '''
+        
+        df_dem = pd.read_sql_query(sql_democratic, db)
+        df_per = pd.read_sql_query(sql_personnel, db)
+        
+        df = pd.concat([df_dem, df_per], ignore_index=True)
+        
+        if df.empty:
+            return jsonify({'success': False, 'msg': '无评分数据'})
+
+        # 2. Sorting Logic
+        type_order = {
+            '院领导': 1,
+            '正职': 2,
+            '副职': 3,
+            '中心基层领导': 4,
+            '其他员工': 5
+        }
+        
+        df['type_rank'] = df['account_type'].map(type_order).fillna(99)
+        df['account_num'] = df['rater_account'].str.extract(r'(\d+)$').fillna(0).astype(int)
+        
+        # Sort: Examinee Dept Code ASC, Type Rank ASC, Account Num ASC
+        df.sort_values(by=['dept_code', 'type_rank', 'account_num'], ascending=[True, True, True], inplace=True)
+        
+        # 3. Generate Serial No
+        df['sort_no'] = range(1, len(df) + 1)
+        
+        # 4. Insert into snapshot table
+        valid_cols = ['sort_no', 'name', 'dept_name', 'dept_code', 'score', 'rater_account']
+        insert_df = df[valid_cols].copy()
+        
+        cursor.execute('DELETE FROM democratic_score_details')
+        
+        data_to_insert = insert_df.to_records(index=False).tolist()
+        cursor.executemany('''
+            INSERT INTO democratic_score_details (sort_no, name, dept_name, dept_code, score, rater_account) 
+            VALUES (?, ?, ?, ?, ?, ?)
+        ''', data_to_insert)
+        
+        db.commit()
+        return jsonify({'success': True, 'msg': f'计算完成，已生成 {len(data_to_insert)} 条记录'})
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'msg': str(e)})
+
+@app.route('/api/democratic-score-details/clear', methods=['POST'])
+@admin_required
+def democratic_score_details_clear():
+    try:
+        db = get_db()
+        db.execute('DELETE FROM democratic_score_details')
+        db.commit()
+        return jsonify({'success': True, 'msg': '已清空打分明细'})
+    except Exception as e:
+        return jsonify({'success': False, 'msg': str(e)})
+
+@app.route('/api/democratic-score-details/export')
+@admin_required
+def democratic_score_details_export():
+    try:
+        db = get_db()
+        df = pd.read_sql_query("SELECT sort_no, name, dept_name, dept_code, score, rater_account FROM democratic_score_details ORDER BY sort_no ASC", db)
+        
+        df.rename(columns={
+            'sort_no': '序号',
+            'name': '姓名',
+            'dept_name': '部门名称',
+            'dept_code': '部门代码',
+            'score': '得分',
+            'rater_account': '打分人账号'
+        }, inplace=True)
+        
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df.to_excel(writer, index=False, sheet_name='被考核人打分明细')
+            
+        output.seek(0)
+        return send_file(output, as_attachment=True, download_name='被考核人打分明细.xlsx')
+    except Exception as e:
+        return str(e)
+
+@app.route('/api/democratic-score-details/save', methods=['POST'])
+@admin_required
+def democratic_score_details_save():
+    try:
+        db = get_db()
+        data = request.json.get('data', [])
+        if not data:
+            return jsonify({'success': False, 'msg': '无更新数据'})
+            
+        cursor = db.cursor()
+        for item in data:
+            detail_id = item.get('id')
+            score = item.get('score')
+            if detail_id is not None and score is not None:
+                cursor.execute('UPDATE democratic_score_details SET score=?, updated_at=CURRENT_TIMESTAMP WHERE id=?', (score, detail_id))
+        
+        db.commit()
+        return jsonify({'success': True, 'msg': f'成功保存 {len(data)} 条修改'})
+    except Exception as e:
+        return jsonify({'success': False, 'msg': str(e)})
 
 
 # ==========================================
@@ -4103,15 +4286,14 @@ def submit_democratic_score():
                 cur.execute(f'UPDATE democratic_scores SET {set_clause} WHERE id=?', params)
 
             else:
-
                 # Insert
+                # Get name for denormalization
+                mgr_row = cur.execute('SELECT name FROM middle_managers WHERE id=?', (examinee_id,)).fetchone()
+                examinee_name = mgr_row['name'] if mgr_row else 'Unknown'
 
-                cols = ['rater_account', 'examinee_id', 'examinee_role', 'total_score'] + dims
-
+                cols = ['rater_account', 'examinee_id', 'examinee_name', 'examinee_role', 'total_score'] + dims
                 q = ', '.join(['?'] * len(cols))
-
-                vals = [rater_account, examinee_id, role, total] + score_vals
-
+                vals = [rater_account, examinee_id, examinee_name, role, total] + score_vals
                 cur.execute(f'INSERT INTO democratic_scores ({", ".join(cols)}) VALUES ({q})', vals)
 
                 

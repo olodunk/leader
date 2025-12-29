@@ -1,0 +1,314 @@
+{% extends "base.html" %}
+
+{% block head_extra %}
+<style>
+    .table-responsive {
+        max-height: 70vh;
+        border-bottom: 1px solid #e6e7e9;
+    }
+
+    th {
+        white-space: nowrap;
+        background-color: #f8fafc !important;
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        box-shadow: 0 1px 0 #e6e7e9;
+    }
+
+    /* Fixed width columns */
+    th.w-number {
+        width: 60px;
+        min-width: 60px;
+    }
+
+    th.w-name {
+        min-width: 100px;
+    }
+
+    th.w-dept {
+        min-width: 150px;
+    }
+
+    th.w-code {
+        min-width: 100px;
+    }
+
+    th.w-score {
+        width: 100px;
+        min-width: 100px;
+    }
+
+    th.w-account {
+        min-width: 120px;
+    }
+
+    .editable-cell input {
+        border: none;
+        background: transparent;
+        width: 100%;
+        padding: 4px;
+        text-align: center;
+    }
+
+    .editable-cell input:not([readonly]) {
+        background-color: #fff;
+        box-shadow: inset 0 0 0 1px #dce1e7;
+    }
+
+    /* Highlight score input focus */
+    .editable-cell input:focus {
+        outline: none;
+        box-shadow: inset 0 0 0 2px #206bc4;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Header & Actions -->
+    <div class="row g-2 align-items-center mb-3">
+        <div class="col">
+            <h2 class="page-title">被考核人打分明细</h2>
+            <div class="text-muted mt-1">共 <span id="total-count">0</span> 条记录</div>
+        </div>
+
+        <!-- Filter and Actions (Right Aligned) -->
+        <div class="col-auto ms-auto d-print-none d-flex align-items-center gap-2">
+            <!-- Filters -->
+            <input type="text" id="f-name" class="form-control form-control-sm" style="width: 120px;" placeholder="姓名">
+            <input type="text" id="f-dept-name" class="form-control form-control-sm" style="width: 150px;"
+                placeholder="部门名称">
+            <input type="text" id="f-dept-code" class="form-control form-control-sm" style="width: 100px;"
+                placeholder="部门代码">
+            <input type="text" id="f-rater-account" class="form-control form-control-sm" style="width: 120px;"
+                placeholder="打分人账号">
+            <button class="btn btn-white btn-sm" onclick="loadData(1)">
+                <i class="ti ti-search"></i>
+            </button>
+            <div class="vr mx-1"></div>
+
+            <!-- Actions -->
+            <button class="btn btn-primary" onclick="calculateScores()">
+                <i class="ti ti-calculator me-2"></i>一键计算
+            </button>
+            <button class="btn btn-ghost-danger" onclick="clearScores()">
+                <i class="ti ti-trash me-2"></i>一键清空
+            </button>
+            <div class="vr mx-1"></div>
+
+            <button class="btn btn-white" onclick="exportData()">
+                <i class="ti ti-download me-2"></i>导出Excel
+            </button>
+            <!-- Note: No editing requested for this page initially, but keeping similar structure -->
+            <button id="btn-edit" class="btn btn-primary" onclick="toggleEditMode(true)">
+                <i class="ti ti-pencil me-2"></i>编辑
+            </button>
+
+            <div id="action-group" style="display: none;">
+                <button class="btn btn-ghost-danger me-2" onclick="cancelEdit()">取消</button>
+                <button class="btn btn-primary" onclick="saveData()">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Table -->
+    <div class="card">
+        <div class="table-responsive">
+            <table class="table table-vcenter table-bordered card-table table-striped" id="dataTable">
+                <thead>
+                    <tr>
+                        <th class="w-number text-center">序号</th>
+                        <th class="w-name">姓名</th>
+                        <th class="w-dept">部门名称</th>
+                        <th class="w-code">部门代码</th>
+                        <th class="w-score text-center">得分</th>
+                        <th class="w-account">打分人账号</th>
+                    </tr>
+                </thead>
+                <tbody id="table-body">
+                    <!-- Loaded via JS -->
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pagination -->
+        <div class="pagination-container d-flex justify-content-between align-items-center p-3 border-top">
+            <div class="d-flex align-items-center gap-2">
+                <span class="text-muted small">每页</span>
+                <select class="form-select form-select-sm" style="width: 70px;" id="limit-select"
+                    onchange="changeLimit()">
+                    <option value="30" selected>30</option>
+                    <option value="50">50</option>
+                    <option value="100">100</option>
+                </select>
+            </div>
+            <ul class="pagination m-0" id="pagination"></ul>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block script_extra %}
+<script>
+    let currentPage = 1;
+    let currentLimit = 30;
+
+    document.addEventListener('DOMContentLoaded', () => loadData());
+
+    async function loadData(page = 1) {
+        currentPage = page;
+        const limit = document.getElementById('limit-select').value;
+        const name = document.getElementById('f-name').value;
+        const deptName = document.getElementById('f-dept-name').value;
+        const deptCode = document.getElementById('f-dept-code').value;
+        const raterAccount = document.getElementById('f-rater-account').value;
+
+        const qs = new URLSearchParams({
+            page, limit,
+            name: name,
+            dept_name: deptName,
+            dept_code: deptCode,
+            rater_account: raterAccount
+        }).toString();
+
+        document.querySelector('.table-responsive').style.opacity = '0.5';
+        try {
+            const res = await (await fetch(`/api/democratic-score-details/list?${qs}`)).json();
+            renderTable(res.data);
+            renderPagination(res.count, limit, page);
+            document.getElementById('total-count').innerText = res.count;
+        } catch (e) {
+            console.error(e);
+            alert('加载失败');
+        } finally {
+            document.querySelector('.table-responsive').style.opacity = '1';
+        }
+    }
+
+    function renderTable(data) {
+        const tbody = document.getElementById('table-body');
+        if (!data || data.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" class="text-center py-5 text-muted">暂无数据，请点击“一键计算”生成</td></tr>';
+            return;
+        }
+        tbody.innerHTML = data.map(item => `
+            <tr data-id="${item.id}">
+                <td class="text-center">${item.sort_no || ''}</td>
+                <td><strong>${item.name || ''}</strong></td>
+                <td>${item.dept_name || ''}</td>
+                <td>${item.dept_code || ''}</td>
+                <td class="editable-cell">
+                    <input type="number" step="0.01" name="score" value="${item.score !== null ? item.score.toFixed(2) : ''}" readonly>
+                </td>
+                <td><span class="badge bg-azure-lt">${item.rater_account || ''}</span></td>
+            </tr>
+        `).join('');
+    }
+
+    function renderPagination(total, limit, current) {
+        const pages = Math.ceil(total / limit);
+        const ul = document.getElementById('pagination');
+        ul.innerHTML = '';
+        if (pages <= 1) return;
+
+        // Prev
+        ul.innerHTML += `<li class="page-item ${current == 1 ? 'disabled' : ''}">
+            <a class="page-link" href="#" onclick="loadData(${current - 1}); return false;">上一页</a>
+        </li>`;
+
+        // Page Numbers
+        let start = Math.max(1, current - 2);
+        let end = Math.min(pages, current + 2);
+
+        if (start > 1) ul.innerHTML += `<li class="page-item disabled"><a class="page-link">...</a></li>`;
+
+        for (let i = start; i <= end; i++) {
+            ul.innerHTML += `<li class="page-item ${current == i ? 'active' : ''}">
+                <a class="page-link" href="#" onclick="loadData(${i}); return false;">${i}</a>
+            </li>`;
+        }
+
+        if (end < pages) ul.innerHTML += `<li class="page-item disabled"><a class="page-link">...</a></li>`;
+
+        // Next
+        ul.innerHTML += `<li class="page-item ${current == pages ? 'disabled' : ''}">
+            <a class="page-link" href="#" onclick="loadData(${current + 1}); return false;">下一页</a>
+        </li>`;
+    }
+
+    function changeLimit() {
+        loadData(1);
+    }
+
+    async function calculateScores() {
+        if (!confirm('确定重新从所有子功能（民主测评、干部综合评价）聚合计算分数吗？这将覆盖当前的明细数据，且不可撤销。')) return;
+        document.body.style.cursor = 'wait';
+        try {
+            const res = await (await fetch('/api/democratic-score-details/calculate', { method: 'POST' })).json();
+            alert(res.msg);
+            if (res.success) loadData(1);
+        } catch (e) {
+            alert('计算失败: ' + e);
+        } finally {
+            document.body.style.cursor = 'default';
+        }
+    }
+
+    async function clearScores() {
+        if (!confirm('确定清空所有明细数据吗？此操作无法撤销。')) return;
+        try {
+            const res = await (await fetch('/api/democratic-score-details/clear', { method: 'POST' })).json();
+            alert(res.msg);
+            if (res.success) loadData(1);
+        } catch (e) {
+            alert('清空失败: ' + e);
+        }
+    }
+
+    function toggleEditMode(edit) {
+        document.querySelectorAll('#dataTable input[name="score"]').forEach(el => el.readOnly = !edit);
+        document.getElementById('btn-edit').style.display = edit ? 'none' : 'inline-block';
+        document.getElementById('action-group').style.display = edit ? 'inline-block' : 'none';
+    }
+
+    function cancelEdit() {
+        if (confirm('取消将丢失未保存的修改，确定吗？')) {
+            loadData(currentPage);
+        }
+    }
+
+    async function saveData() {
+        const rows = document.querySelectorAll('#dataTable tbody tr');
+        const updates = [];
+
+        rows.forEach(tr => {
+            const id = tr.getAttribute('data-id');
+            const scoreInp = tr.querySelector('input[name="score"]');
+            if (id && scoreInp) {
+                updates.push({ id, score: scoreInp.value });
+            }
+        });
+
+        try {
+            const res = await (await fetch('/api/democratic-score-details/save', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ data: updates })
+            })).json();
+
+            alert(res.msg);
+            if (res.success) {
+                toggleEditMode(false);
+                loadData(currentPage);
+            }
+        } catch (e) {
+            alert('保存失败: ' + e);
+        }
+    }
+
+    function exportData() {
+        window.location.href = '/api/democratic-score-details/export';
+    }
+</script>
+{% endblock %}
