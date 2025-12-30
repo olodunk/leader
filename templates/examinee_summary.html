@@ -1,0 +1,250 @@
+{% extends "base.html" %}
+
+{% block head_extra %}
+<style>
+    .table-responsive {
+        max-height: 70vh;
+        border-bottom: 1px solid #e6e7e9;
+    }
+
+    th {
+        white-space: nowrap;
+        background-color: #f8fafc !important;
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        box-shadow: 0 1px 0 #e6e7e9;
+        font-size: 11px;
+        padding: 4px 6px;
+    }
+
+    th.w-name {
+        min-width: 70px;
+    }
+
+    th.w-dept {
+        min-width: 100px;
+    }
+
+    .editable-cell input {
+        border: none;
+        background: transparent;
+        width: 55px;
+        padding: 2px;
+        text-align: center;
+        font-size: 11px;
+    }
+
+    .editable-cell input:not([readonly]) {
+        background-color: #fff;
+        box-shadow: inset 0 0 0 1px #dce1e7;
+    }
+
+    .editable-cell input:focus {
+        outline: none;
+        box-shadow: inset 0 0 0 2px #206bc4;
+    }
+
+    td {
+        font-size: 11px;
+        text-align: center;
+        padding: 2px 4px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Header & Actions -->
+    <div class="row g-2 align-items-center mb-3">
+        <div class="col">
+            <h2 class="page-title">被考核人汇总得分</h2>
+            <div class="text-muted mt-1">共 <span id="total-count">0</span> 条记录</div>
+        </div>
+
+        <div class="col-auto ms-auto d-print-none d-flex align-items-center gap-2">
+            <button class="btn btn-primary" onclick="calculateScores()">
+                <i class="ti ti-calculator me-2"></i>计算
+            </button>
+            <button id="btn-edit" class="btn btn-primary" onclick="toggleEditMode(true)">
+                <i class="ti ti-pencil me-2"></i>编辑
+            </button>
+            <div id="action-group" style="display: none;">
+                <button class="btn btn-ghost-danger me-2" onclick="cancelEdit()">取消</button>
+                <button class="btn btn-primary" onclick="saveData()">保存</button>
+            </div>
+            <button class="btn btn-white" onclick="exportData()">
+                <i class="ti ti-download me-2"></i>导出Excel
+            </button>
+        </div>
+    </div>
+
+    <!-- Table -->
+    <div class="card">
+        <div class="table-responsive">
+            <table class="table table-vcenter table-bordered card-table table-striped" id="dataTable">
+                <thead>
+                    <tr>
+                        <th class="w-name">姓名</th>
+                        <th class="w-dept">部门名称</th>
+                        <th>院领导评分</th>
+                        <th>职能部门正职评分</th>
+                        <th>职能部门副职评分</th>
+                        <th>职能部门员工评分</th>
+                        <th>职能部门ABC票加权评分</th>
+                        <th>职能部门BC票加权评分</th>
+                        <th>研究所正职评分</th>
+                        <th>研究所副职评分</th>
+                        <th>研究所其他员工评分</th>
+                        <th>研究所ABC票加权评分</th>
+                        <th>研究所BC票加权评分</th>
+                        <th>中心及昆冈正职评分</th>
+                        <th>中心及昆冈副职评分</th>
+                        <th>中心及昆冈（含分公司）加权</th>
+                        <th>基层领导评分（两中心）</th>
+                        <th>中心及昆冈其他员工评分</th>
+                        <th>昆冈正职评分</th>
+                        <th>昆冈副职评分</th>
+                        <th>昆冈分公司正职评分</th>
+                        <th>昆冈分公司副职评分</th>
+                        <th>总分</th>
+                    </tr>
+                </thead>
+                <tbody id="table-body">
+                    <tr>
+                        <td colspan="23" class="text-center py-5 text-muted">点击"计算"生成数据</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block script_extra %}
+<script>
+    let originalData = [];
+
+    // 所有分数字段（按表头顺序，共21个分数列）
+    const scoreFields = [
+        'score_college_leader',
+        'score_func_principal', 'score_func_deputy', 'score_func_employee',
+        'score_func_abc_weighted', 'score_func_bc_weighted',
+        'score_inst_principal', 'score_inst_deputy', 'score_inst_employee',
+        'score_inst_abc_weighted', 'score_inst_bc_weighted',
+        'score_center_principal', 'score_center_deputy', 'score_center_kungang',
+        'score_center_grassroot', 'score_center_employee',
+        'score_kungang_principal', 'score_kungang_deputy',
+        'score_branch_principal', 'score_branch_deputy',
+        'total_score'
+    ];
+
+    document.addEventListener('DOMContentLoaded', loadData);
+
+    async function loadData() {
+        try {
+            const res = await (await fetch('/api/examinee-summary/list')).json();
+            if (res.success) {
+                originalData = JSON.parse(JSON.stringify(res.data));
+                renderTable(res.data);
+                document.getElementById('total-count').innerText = res.data.length;
+            }
+        } catch (e) {
+            console.error('加载失败:', e);
+        }
+    }
+
+    function renderTable(data) {
+        const tbody = document.getElementById('table-body');
+
+        if (!data || data.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="23" class="text-center py-5 text-muted">暂无数据，请点击"计算"生成</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = data.map(row => {
+            let html = `<tr data-id="${row.id}">`;
+            html += `<td><strong>${row.name || ''}</strong></td>`;
+            html += `<td>${row.dept_name || ''}</td>`;
+
+            // 所有分数字段
+            scoreFields.forEach(field => {
+                const val = row[field] || 0;
+                const isTotal = field === 'total_score';
+                if (isTotal) {
+                    html += `<td><strong>${val > 0 ? val.toFixed(2) : ''}</strong></td>`;
+                } else {
+                    html += `<td class="editable-cell"><input type="number" step="0.01" name="${field}" value="${val > 0 ? val.toFixed(2) : ''}" readonly></td>`;
+                }
+            });
+
+            html += '</tr>';
+            return html;
+        }).join('');
+    }
+
+    function toggleEditMode(edit) {
+        document.querySelectorAll('#dataTable .editable-cell input').forEach(el => el.readOnly = !edit);
+        document.getElementById('btn-edit').style.display = edit ? 'none' : 'inline-block';
+        document.getElementById('action-group').style.display = edit ? 'inline-block' : 'none';
+    }
+
+    function cancelEdit() {
+        if (confirm('取消将丢失未保存的修改，确定吗？')) {
+            renderTable(originalData);
+            toggleEditMode(false);
+        }
+    }
+
+    async function calculateScores() {
+        if (!confirm('确定重新计算汇总得分吗？')) return;
+        document.body.style.cursor = 'wait';
+        try {
+            const res = await (await fetch('/api/examinee-summary/calculate', { method: 'POST' })).json();
+            alert(res.msg);
+            if (res.success) loadData();
+        } catch (e) {
+            alert('计算失败: ' + e);
+        } finally {
+            document.body.style.cursor = 'default';
+        }
+    }
+
+    async function saveData() {
+        const rows = document.querySelectorAll('#dataTable tbody tr[data-id]');
+        const updates = [];
+
+        rows.forEach(tr => {
+            const id = tr.dataset.id;
+            const item = { id: parseInt(id) };
+
+            tr.querySelectorAll('.editable-cell input').forEach(input => {
+                const val = input.value.trim();
+                item[input.name] = val ? parseFloat(val) : 0;
+            });
+
+            updates.push(item);
+        });
+
+        try {
+            const res = await (await fetch('/api/examinee-summary/save', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ data: updates })
+            })).json();
+
+            alert(res.msg);
+            if (res.success) {
+                toggleEditMode(false);
+                loadData();
+            }
+        } catch (e) {
+            alert('保存失败: ' + e);
+        }
+    }
+
+    function exportData() {
+        window.location.href = '/api/examinee-summary/export';
+    }
+</script>
+{% endblock %}

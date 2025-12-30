@@ -452,6 +452,51 @@ def upgrade_schema(cursor):
         )
     ''')
     
+    # --------------------------------------------------------
+    # 表 16: 被考核人汇总得分表 (examinee_score_summary) - New
+    # --------------------------------------------------------
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS examinee_score_summary (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            examinee_id INTEGER,               -- 被考核人ID (关联 middle_managers)
+            name TEXT,                          -- 姓名
+            dept_name TEXT,                     -- 部门名称
+            
+            -- 院领导评分
+            score_college_leader REAL DEFAULT 0,
+            
+            -- 职能部门
+            score_func_principal REAL DEFAULT 0,
+            score_func_deputy REAL DEFAULT 0,
+            score_func_employee REAL DEFAULT 0,
+            score_func_abc_weighted REAL DEFAULT 0,
+            score_func_bc_weighted REAL DEFAULT 0,
+            
+            -- 研究所
+            score_inst_principal REAL DEFAULT 0,
+            score_inst_deputy REAL DEFAULT 0,
+            score_inst_employee REAL DEFAULT 0,
+            score_inst_abc_weighted REAL DEFAULT 0,
+            score_inst_bc_weighted REAL DEFAULT 0,
+            
+            -- 中心及昆冈
+            score_center_principal REAL DEFAULT 0,
+            score_center_deputy REAL DEFAULT 0,
+            score_center_grassroot REAL DEFAULT 0,  -- 基层领导（两中心）
+            score_center_employee REAL DEFAULT 0,
+            
+            -- 昆冈分公司 (兰州/抚顺)
+            score_branch_principal REAL DEFAULT 0,
+            score_branch_deputy REAL DEFAULT 0,
+            
+            -- 总分
+            total_score REAL DEFAULT 0,
+            
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    
     print("数据库结构检查完毕。")
 
 if __name__ == '__main__':

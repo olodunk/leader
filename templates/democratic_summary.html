@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row mb-3">
+    <div class="col-md-6">
+        <h2>被考核人打分汇总</h2>
+    </div>
+    <div class="col-md-6 text-end">
+        <button class="btn btn-success" onclick="exportExcel()">导出Excel</button>
+    </div>
+</div>
+
+<div class="table-responsive">
+    <table class="table table-bordered table-striped" id="summaryTable">
+        <thead class="table-dark">
+            <tr>
+                <th rowspan="2">姓名</th>
+                <th rowspan="2">部门名称</th>
+                <th rowspan="2">院领导评分</th>
+
+                <th colspan="3">职能部门</th>
+
+                <th colspan="3">研究所</th>
+
+                <th colspan="2">中心及昆冈(北京)</th>
+                <th colspan="2">昆冈分公司(兰州/抚顺)</th>
+
+                <th rowspan="2">总分</th>
+            </tr>
+            <tr>
+                <!-- Func -->
+                <th>正职评分</th>
+                <th>副职评分</th>
+                <th>员工评分</th>
+
+                <!-- Inst -->
+                <th>正职评分</th>
+                <th>副职评分</th>
+                <th>员工评分</th>
+
+                <!-- Center/Kungang -->
+                <th>正职评分</th>
+                <th>副职评分</th>
+
+                <!-- Branch -->
+                <th>正职评分</th>
+                <th>副职评分</th>
+            </tr>
+        </thead>
+        <tbody id="tableBody">
+            <!-- Data loaded via JS -->
+            <tr>
+                <td colspan="15" class="text-center">加载中...</td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        loadData();
+    });
+
+    function loadData() {
+        fetch('/api/admin/democratic-summary/data')
+            .then(response => response.json())
+            .then(res => {
+                if (res.code === 0) {
+                    renderTable(res.data);
+                } else {
+                    alert('加载失败: ' + res.msg);
+                }
+            })
+            .catch(err => alert('Error: ' + err));
+    }
+
+    function renderTable(data) {
+        const tbody = document.getElementById('tableBody');
+        tbody.innerHTML = '';
+
+        // Config Keys matching app.py keys
+        const keys = [
+            'college_leader',
+            'func_principal', 'func_deputy', 'func_employee',
+            'inst_principal', 'inst_deputy', 'inst_employee',
+            'center_kungang_principal', 'center_kungang_deputy',
+            'branch_principal', 'branch_deputy'
+        ];
+
+        data.forEach(row => {
+            const tr = document.createElement('tr');
+
+            // Basic Info
+            let html = `<td>${row.name}</td><td>${row.dept_name}</td>`;
+
+            // Dynamic Columns
+            keys.forEach(key => {
+                const cell = row[key] || { avg: 0, weight: 0, weighted_score: 0 };
+                // Display: Weighted Score (gray raw avg?)
+                // Or just Weighted Score as per request?
+                // "表头是...评分...加权评分" -> The request headers imply we show the WEIGHTED score or the RAW score?
+                // "院领导评分" usually means the raw score or the result?
+                // Given "Total Score" column, these should probably be the components.
+                // But usually tables show Raw (Weight%) -> Weighted.
+                // Let's show Weighted Score big, and maybe raw/weight in tooltip or small text.
+                // User asked for "Score" headers.
+                // Let's show: Weighted Score (Raw: X) 
+
+                // Wait, standard summary tables often show the RAW Average. The final Total is weighted.
+                // But the Plan user prompt said: "职能部门ABC票加权评分"... oh wait that was deleted.
+                // "院领导评分" -> This implies the result of that column's contribution?
+                // Let's show: `Weighted (Raw)` to be safe.
+
+                const displayVal = cell.weighted_score.toFixed(2);
+                const rawVal = cell.avg.toFixed(2);
+                const weight = cell.weight;
+
+                // Highlight if weight > 0
+                const style = weight > 0 ? "font-weight:bold;" : "color:gray;";
+
+                html += `<td style="${style}" title="Raw: ${rawVal}, W: ${weight}%">${displayVal}</td>`;
+            });
+
+            // Total
+            html += `<td><strong>${row.final_total.toFixed(2)}</strong></td>`;
+
+            tr.innerHTML = html;
+            tbody.appendChild(tr);
+        });
+    }
+</script>
+{% endblock %}

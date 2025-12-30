@@ -1120,6 +1120,594 @@ def democratic_score_details_save():
 
 
 # ==========================================
+# 6.4.5 API: 被考核人汇总得分 (Examinee Score Summary)
+# ==========================================
+
+@app.route('/admin/examinee-summary')
+@admin_required
+def examinee_summary_page():
+    """被考核人汇总得分页面"""
+    return render_template('examinee_summary.html')
+
+@app.route('/api/examinee-summary/list')
+@admin_required
+def examinee_summary_list():
+    """获取汇总得分列表"""
+    try:
+        db = get_db()
+        data = db.execute('SELECT * FROM examinee_score_summary ORDER BY id ASC').fetchall()
+        return jsonify({'success': True, 'data': [dict(row) for row in data]})
+    except Exception as e:
+        return jsonify({'success': False, 'msg': str(e)})
+
+@app.route('/api/examinee-summary/calculate', methods=['POST'])
+@admin_required
+def examinee_summary_calculate():
+    """一键计算被考核人汇总得分 - 支持院长助理和职能部门正职"""
+    try:
+        db = get_db()
+        cursor = db.cursor()
+        
+        # 1. 获取要计算的被考核人
+        examinees = db.execute('''
+            SELECT id, name, dept_name, role, dept_code FROM middle_managers 
+            WHERE role IN ('院长助理', '职能部门正职', '职能部门副职', '研究所正职', '研究所副职', '两中心正职', '中心正职') ORDER BY id ASC
+        ''').fetchall()
+        
+        if not examinees:
+            return jsonify({'success': False, 'msg': '没有找到可计算的被考核人'})
+        
+        # 2. 获取院领导账号映射 (account -> leader_key)
+        leader_mappings = db.execute('SELECT leader_key, account FROM leader_account_mapping').fetchall()
+        leader_account_map = {m['account']: m['leader_key'] for m in leader_mappings if m['account']}
+        
+        # 3. 获取所有账号信息
+        accounts = db.execute('''
+            SELECT ea.username, ea.account_type, ea.dept_code, ea.dept_name, dc.dept_type
+            FROM evaluation_accounts ea
+            LEFT JOIN department_config dc ON ea.dept_code = dc.dept_code
+        ''').fetchall()
+        account_info = {a['username']: dict(a) for a in accounts}
+        
+        # 4. 获取打分明细数据
+        score_details = db.execute('SELECT name, score, rater_account FROM democratic_score_details').fetchall()
+        
+        # 5. 清空并重新计算
+        cursor.execute('DELETE FROM examinee_score_summary')
+        
+        for examinee in examinees:
+            eid = examinee['id']
+            name = examinee['name']
+            dept_name = examinee['dept_name']
+            role = examinee['role']
+            dept_code = examinee['dept_code']
+            
+            # 过滤：如果是'中心正职'或'两中心正职'，必须属于两中心，排除昆冈分公司
+            if role in ['两中心正职', '中心正职'] and dept_name not in ['兰州化工研究中心', '大庆化工研究中心']:
+                continue
+            
+            # 获取院领导权重配置（根据被考核人所属部门）
+            # 院长助理 -> dept_code='A1', 职能部门正职 -> 根据dept_name查找
+            if role == '院长助理':
+                leader_weight_row = db.execute('''
+                    SELECT w_yang_weisheng, w_wang_ling, w_xu_qingchun, w_zhao_tong, w_ge_shaohui, w_liu_chaowei
+                    FROM leader_weight_config WHERE dept_code = 'A1'
+                ''').fetchone()
+            else:
+                # 职能部门/研究所/两中心/昆冈 - 优先使用dept_code查找，其次根据部门名称查找
+                leader_weight_row = None
+                if dept_code:
+                    leader_weight_row = db.execute('''
+                        SELECT w_yang_weisheng, w_wang_ling, w_xu_qingchun, w_zhao_tong, w_ge_shaohui, w_liu_chaowei
+                        FROM leader_weight_config WHERE dept_code = ?
+                    ''', (dept_code,)).fetchone()
+                
+                if not leader_weight_row:
+                    leader_weight_row = db.execute('''
+                        SELECT w_yang_weisheng, w_wang_ling, w_xu_qingchun, w_zhao_tong, w_ge_shaohui, w_liu_chaowei
+                        FROM leader_weight_config 
+                        WHERE dept_name = ? OR ? LIKE '%' || dept_name || '%' OR dept_name LIKE '%' || ? || '%'
+                    ''', (dept_name, dept_name, dept_name)).fetchone()
+            
+            leader_weights = {}
+            if leader_weight_row:
+                leader_weights = {
+                    'yang_weisheng': leader_weight_row['w_yang_weisheng'] or 0,
+                    'wang_ling': leader_weight_row['w_wang_ling'] or 0,
+                    'xu_qingchun': leader_weight_row['w_xu_qingchun'] or 0,
+                    'zhao_tong': leader_weight_row['w_zhao_tong'] or 0,
+                    'ge_shaohui': leader_weight_row['w_ge_shaohui'] or 0,
+                    'liu_chaowei': leader_weight_row['w_liu_chaowei'] or 0,
+                }
+            
+            # 获取该被考核人的所有评分
+            examinee_scores_raw = [sd for sd in score_details if sd['name'] == name]
+            
+            # 分组：按考核人类型分类评分
+            leader_scores = {}  # {leader_key: [scores]}
+            func_principal_scores = []  # 职能部门正职
+            func_deputy_scores = []  # 职能部门副职
+            func_employee_scores = []  # 职能部门员工
+            func_assistant_scores = []  # 院长助理账号
+            inst_principal_scores = []  # 研究所正职
+            inst_deputy_scores = []  # 研究所副职
+            inst_employee_scores = []  # 研究所员工
+            center_kungang_scores = []  # 两中心正职 + 昆冈分公司正职 (Principal scores)
+            center_kungang_deputy_scores = []  # 两中心副职 + 昆冈分公司副职
+            center_grassroots_scores = []  # 两中心基层领导
+            center_employee_scores = []  # 两中心其他员工
+            
+            for sd in examinee_scores_raw:
+                rater_acc = sd['rater_account']
+                score = sd['score'] or 0
+                acc = account_info.get(rater_acc, {})
+                acc_type = acc.get('account_type', '')
+                dept_type = acc.get('dept_type', '')
+                acc_dept_name = acc.get('dept_name', '')
+                
+                # 院领导
+                if rater_acc in leader_account_map:
+                    lkey = leader_account_map[rater_acc]
+                    if lkey not in leader_scores:
+                        leader_scores[lkey] = []
+                    leader_scores[lkey].append(score)
+                    continue
+                
+                # 职能部门正职
+                if acc_type == '正职' and dept_type == '职能部门':
+                    func_principal_scores.append(score)
+                    continue
+                
+                # 职能部门副职
+                if acc_type == '副职' and dept_type == '职能部门':
+                    func_deputy_scores.append(score)
+                    continue
+                
+                # 职能部门员工
+                if acc_type == '其他员工' and dept_type == '职能部门':
+                    func_employee_scores.append(score)
+                    continue
+                
+                # 院长助理账号
+                if acc_type == '院长助理':
+                    func_assistant_scores.append(score)
+                    continue
+                
+                # 研究所正职
+                if acc_type == '正职' and dept_type == '研究所':
+                    inst_principal_scores.append(score)
+                    continue
+                
+                # 研究所副职
+                if acc_type == '副职' and dept_type == '研究所':
+                    inst_deputy_scores.append(score)
+                    continue
+                
+                # 研究所员工
+                if acc_type == '其他员工' and dept_type == '研究所':
+                    inst_employee_scores.append(score)
+                    continue
+                
+                # 两中心正职 + 昆冈分公司正职
+                if acc_type == '正职':
+                    if acc_dept_name in ['兰州化工研究中心', '大庆化工研究中心'] or ('昆冈' in acc_dept_name and '分公司' in acc_dept_name):
+                        center_kungang_scores.append(score)
+                        continue
+                
+                # 两中心副职 + 昆冈分公司副职
+                if acc_type == '副职':
+                    if acc_dept_name in ['兰州化工研究中心', '大庆化工研究中心'] or ('昆冈' in acc_dept_name and '分公司' in acc_dept_name):
+                        center_kungang_deputy_scores.append(score)
+                        continue
+                
+                # 两中心基层领导
+                if acc_type == '中心基层领导' and acc_dept_name in ['兰州化工研究中心', '大庆化工研究中心']:
+                         center_grassroots_scores.append(score)
+                         continue
+                
+                # 两中心其他员工
+                if acc_type == '其他员工' and acc_dept_name in ['兰州化工研究中心', '大庆化工研究中心']:
+                         center_employee_scores.append(score)
+                         continue
+            
+            # ===== 计算各项得分 =====
+            
+            # 1. 院领导评分 = Σ(院领导i的评分 × 院领导i的个人权重%)
+            score_college_leader = 0
+            for lkey, weight in leader_weights.items():
+                if lkey in leader_scores and leader_scores[lkey]:
+                    avg = sum(leader_scores[lkey]) / len(leader_scores[lkey])
+                    score_college_leader += avg * (weight / 100.0)
+            
+            # 根据角色不同，计算方式不同
+            if role == '院长助理':
+                # === 院长助理计算逻辑 ===
+                # 职能部门正职评分 = (正职+院长助理)平均分 × 10%
+                all_func = func_principal_scores + func_assistant_scores
+                score_func_principal = (sum(all_func) / len(all_func) * 0.10) if all_func else 0
+                score_func_deputy = 0
+                score_func_employee = 0
+                score_func_abc = 0
+                score_func_bc = 0
+                
+                # 研究所正职评分 = 平均分 × 10%
+                score_inst_principal = (sum(inst_principal_scores) / len(inst_principal_scores) * 0.10) if inst_principal_scores else 0
+                score_inst_deputy = 0
+                score_inst_employee = 0
+                score_inst_abc = 0
+                score_inst_bc = 0
+                score_center_principal = 0
+                score_center_deputy = 0
+                score_center_grassroot = 0
+                score_center_employee = 0
+                
+                # 中心及昆冈加权 = 平均分 × 10%
+                score_center_kungang = (sum(center_kungang_scores) / len(center_kungang_scores) * 0.10) if center_kungang_scores else 0
+                
+                # 总分 = 四项相加
+                total_score = score_college_leader + score_func_principal + score_inst_principal + score_center_kungang
+                
+            elif role == '职能部门正职':
+                # === 职能部门正职计算逻辑 ===
+                # 原始分数（用于展示）
+                score_func_principal = (sum(func_principal_scores) / len(func_principal_scores)) if func_principal_scores else 0
+                score_func_deputy = (sum(func_deputy_scores) / len(func_deputy_scores)) if func_deputy_scores else 0
+                score_func_employee = (sum(func_employee_scores) / len(func_employee_scores)) if func_employee_scores else 0
+                
+                # ABC票加权 = (正职+副职+员工+院长助理)平均分 × 30%
+                all_abc = func_principal_scores + func_deputy_scores + func_employee_scores + func_assistant_scores
+                score_func_abc = (sum(all_abc) / len(all_abc) * 0.30) if all_abc else 0
+                score_func_bc = 0
+                
+                # 研究所正职评分 = 平均分 × 权重% (暂定10%)
+                score_inst_principal = (sum(inst_principal_scores) / len(inst_principal_scores) * 0.10) if inst_principal_scores else 0
+                score_inst_deputy = 0
+                score_inst_employee = 0
+                score_inst_abc = 0
+                score_inst_bc = 0
+                
+                # 中心及昆冈加权 = 平均分 × 权重% (暂定10%)
+                score_center_kungang = (sum(center_kungang_scores) / len(center_kungang_scores) * 0.10) if center_kungang_scores else 0
+                
+                score_center_principal = 0
+                score_center_deputy = 0
+                score_center_grassroot = 0
+                score_center_employee = 0
+                
+                # 总分 = 院领导 + ABC加权 + 研究所 + 中心昆冈
+                total_score = score_college_leader + score_func_abc + score_inst_principal + score_center_kungang
+            
+            elif role == '职能部门副职':
+                # === 职能部门副职计算逻辑 ===
+                # 原始分数（用于展示）
+                score_func_deputy = (sum(func_deputy_scores) / len(func_deputy_scores)) if func_deputy_scores else 0
+                score_func_employee = (sum(func_employee_scores) / len(func_employee_scores)) if func_employee_scores else 0
+                
+                # 职能部门正职评分 = (正职+院长助理)平均分 × 20%
+                all_principal = func_principal_scores + func_assistant_scores
+                score_func_principal = (sum(all_principal) / len(all_principal) * 0.20) if all_principal else 0
+                
+                # BC票加权 = (副职+员工)平均分 × 30%
+                all_bc = func_deputy_scores + func_employee_scores
+                score_func_bc = (sum(all_bc) / len(all_bc) * 0.30) if all_bc else 0
+                score_func_abc = 0
+                
+                score_inst_principal = 0
+                score_inst_deputy = 0
+                score_inst_employee = 0
+                score_inst_abc = 0
+                score_inst_bc = 0
+                score_center_principal = 0
+                score_center_deputy = 0
+                score_center_grassroot = 0
+                score_center_employee = 0
+                score_center_kungang = 0
+                
+                # 总分 = 院领导 + 正职加权 + BC加权
+                total_score = score_college_leader + score_func_principal + score_func_bc
+            
+            elif role == '研究所正职':
+                # === 研究所正职计算逻辑 ===
+                # 原始分数（用于展示）
+                score_inst_principal = (sum(inst_principal_scores) / len(inst_principal_scores)) if inst_principal_scores else 0
+                score_inst_deputy = (sum(inst_deputy_scores) / len(inst_deputy_scores)) if inst_deputy_scores else 0
+                score_inst_employee = (sum(inst_employee_scores) / len(inst_employee_scores)) if inst_employee_scores else 0
+                
+                # 职能部门正职评分 = (正职+院长助理)平均分 × 20%
+                all_func = func_principal_scores + func_assistant_scores
+                score_func_principal = (sum(all_func) / len(all_func) * 0.20) if all_func else 0
+                score_func_deputy = 0
+                score_func_employee = 0
+                score_func_abc = 0
+                score_func_bc = 0
+                
+                # 研究所ABC票加权 = (正职+副职+员工)平均分 × 30%
+                all_inst_abc = inst_principal_scores + inst_deputy_scores + inst_employee_scores
+                score_inst_abc = (sum(all_inst_abc) / len(all_inst_abc) * 0.30) if all_inst_abc else 0
+                score_inst_bc = 0
+                
+                score_center_principal = 0
+                score_center_deputy = 0
+                score_center_grassroot = 0
+                score_center_employee = 0
+                
+                score_center_kungang = 0
+                
+                # 总分 = 院领导 + 职能正职加权 + 研究所ABC加权
+                total_score = score_college_leader + score_func_principal + score_inst_abc
+            
+            elif role == '研究所副职':
+                # === 研究所副职计算逻辑 ===
+                # 原始分数（用于展示）
+                score_inst_deputy = (sum(inst_deputy_scores) / len(inst_deputy_scores)) if inst_deputy_scores else 0
+                score_inst_employee = (sum(inst_employee_scores) / len(inst_employee_scores)) if inst_employee_scores else 0
+                
+                # 研究所正职评分 = 平均分 × 20%
+                score_inst_principal = (sum(inst_principal_scores) / len(inst_principal_scores) * 0.20) if inst_principal_scores else 0
+                
+                # 研究所BC票加权 = (副职+员工)平均分 × 30%
+                all_inst_bc = inst_deputy_scores + inst_employee_scores
+                score_inst_bc = (sum(all_inst_bc) / len(all_inst_bc) * 0.30) if all_inst_bc else 0
+                score_inst_abc = 0
+                
+                score_func_principal = 0
+                score_func_deputy = 0
+                score_func_employee = 0
+                score_func_abc = 0
+                score_func_bc = 0
+                score_center_kungang = 0
+                score_center_principal = 0
+                score_center_deputy = 0
+                score_center_grassroot = 0
+                score_center_employee = 0
+                
+                # 总分 = 院领导 + 研究所正职加权 + BC加权
+                total_score = score_college_leader + score_inst_principal + score_inst_bc
+            
+            elif role in ['两中心正职', '中心正职'] and dept_name in ['兰州化工研究中心', '大庆化工研究中心']:
+                # === 两中心正职计算逻辑 ===
+                # 原始分数（用于展示）
+                # 'center_kungang_scores' 收集的是所有两中心/昆冈正职
+                score_center_principal = (sum(center_kungang_scores) / len(center_kungang_scores)) if center_kungang_scores else 0
+                score_center_deputy = (sum(center_kungang_deputy_scores) / len(center_kungang_deputy_scores)) if center_kungang_deputy_scores else 0
+                # 基层领导和员工加权分（用于总分）
+                _score_center_grassroot_raw = (sum(center_grassroots_scores) / len(center_grassroots_scores)) if center_grassroots_scores else 0
+                _score_center_employee_raw = (sum(center_employee_scores) / len(center_employee_scores)) if center_employee_scores else 0
+                
+                # 用于数据库存储（加权值）
+                score_center_grassroot = _score_center_grassroot_raw * 0.20
+                score_center_employee = _score_center_employee_raw * 0.10
+                
+                # 职能部门正职评分 = (正职+院长助理)平均分 × 10%
+                all_func = func_principal_scores + func_assistant_scores
+                score_func_principal = (sum(all_func) / len(all_func) * 0.10) if all_func else 0
+                
+                # 中心及昆冈加权 = (所有两中心,昆冈分公司正副职)平均分 × 10% (共享10%)
+                all_center_kungang = center_kungang_scores + center_kungang_deputy_scores
+                score_center_kungang = (sum(all_center_kungang) / len(all_center_kungang) * 0.10) if all_center_kungang else 0
+                
+                score_func_deputy = 0
+                score_func_employee = 0
+                score_func_abc = 0
+                score_func_bc = 0
+                
+                score_inst_principal = 0
+                score_inst_deputy = 0
+                score_inst_employee = 0
+                score_inst_abc = 0
+                score_inst_bc = 0
+                
+                # 总分 = 院领导 + 职能正职 + 中心加权 + 基层领导 + 其他员工
+                total_score = score_college_leader + score_func_principal + score_center_kungang + score_center_grassroot + score_center_employee
+
+            else:
+                 # 其他角色暂未实现
+                 total_score = 0
+                 score_func_principal = 0
+                 score_func_deputy = 0
+                 score_func_employee = 0
+                 score_func_abc = 0
+                 score_func_bc = 0
+                 score_inst_principal = 0
+                 score_inst_deputy = 0
+                 score_inst_employee = 0
+                 score_inst_abc = 0
+                 score_inst_bc = 0
+                 score_center_principal = 0
+                 score_center_deputy = 0
+                 score_center_grassroot = 0
+                 score_center_employee = 0
+                 score_center_kungang = 0
+            
+            cursor.execute('''
+                INSERT INTO examinee_score_summary (
+                    examinee_id, name, dept_name,
+                    score_college_leader, 
+                    score_func_principal, score_func_deputy, score_func_employee, 
+                    score_func_abc_weighted, score_func_bc_weighted,
+                    score_inst_principal, score_inst_deputy, score_inst_employee,
+                    score_inst_abc_weighted, score_inst_bc_weighted, 
+                    score_center_principal, score_center_deputy, score_center_grassroot, score_center_employee,
+                    score_center_kungang, total_score
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                eid, name, dept_name,
+                score_college_leader,
+                score_func_principal, score_func_deputy, score_func_employee,
+                score_func_abc, score_func_bc,
+                score_inst_principal, score_inst_deputy, score_inst_employee,
+                score_inst_abc, score_inst_bc,
+                score_center_principal, score_center_deputy, score_center_grassroot, score_center_employee,
+                score_center_kungang, total_score
+            ))
+        
+        db.commit()
+        return jsonify({'success': True, 'msg': f'计算完成，已生成 {len(examinees)} 条记录'})
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'msg': str(e)})
+
+def _get_rater_roles_simple(acc_info):
+    """
+    简化版考核人角色识别
+    根据账号类型和部门类型确定考核人角色
+    """
+    roles = []
+    acc_type = acc_info.get('account_type', '')
+    dept_type = acc_info.get('dept_type', '')
+    dept_name = acc_info.get('dept_name', '')
+    dept_code = acc_info.get('dept_code', '')
+    
+    if acc_type == '院领导' or dept_code == 'A0':
+        roles.append('院领导')
+    
+    if acc_type == '正职':
+        if dept_type == '职能部门':
+            roles.append('职能部门正职 (含院长助理)')
+        elif dept_type == '研究所':
+            roles.append('研究所正职')
+        elif '中心' in dept_name:
+            roles.append('中心领导班子 (正职)')
+        elif '昆冈' in dept_name and '分公司' in dept_name:
+            roles.append('所属分公司班子正职')
+        elif '昆冈' in dept_name:
+            roles.append('昆冈班子正职')
+    
+    if acc_type == '副职':
+        if dept_type == '职能部门':
+            roles.append('职能部门副职')
+        elif dept_type == '研究所':
+            roles.append('研究所副职')
+        elif '中心' in dept_name:
+            roles.append('中心领导班子 (副职)')
+        elif '昆冈' in dept_name and '分公司' in dept_name:
+            roles.append('所属分公司班子副职')
+        elif '昆冈' in dept_name:
+            roles.append('昆冈班子副职')
+    
+    if acc_type == '其他员工':
+        if dept_type == '职能部门':
+            roles.append('职能部门其他员工')
+        elif dept_type == '研究所':
+            roles.append('研究所其他员工')
+    
+    if acc_type == '中心基层领导':
+        roles.append('职工代表中基层领导人员 (两中心)')
+    
+    return roles
+
+@app.route('/api/examinee-summary/save', methods=['POST'])
+@admin_required
+def examinee_summary_save():
+    """保存编辑的汇总数据"""
+    try:
+        db = get_db()
+        data = request.json.get('data', [])
+        if not data:
+            return jsonify({'success': False, 'msg': '无更新数据'})
+        
+        cursor = db.cursor()
+        for item in data:
+            row_id = item.get('id')
+            if row_id:
+                # 动态构建更新语句
+                update_fields = []
+                values = []
+                for field in ['score_college_leader', 
+                              'score_func_principal', 'score_func_deputy', 'score_func_employee',
+                              'score_func_abc_weighted', 'score_func_bc_weighted',
+                              'score_inst_principal', 'score_inst_deputy', 'score_inst_employee',
+                              'score_inst_abc_weighted', 'score_inst_bc_weighted',
+                              'score_center_principal', 'score_center_deputy', 'score_center_kungang',
+                              'score_center_grassroot', 'score_center_employee',
+                              'score_kungang_principal', 'score_kungang_deputy',
+                              'score_branch_principal', 'score_branch_deputy', 'total_score']:
+                    if field in item:
+                        update_fields.append(f'{field}=?')
+                        values.append(item[field])
+                
+                if update_fields:
+                    values.append(row_id)
+                    sql = f'UPDATE examinee_score_summary SET {", ".join(update_fields)}, updated_at=CURRENT_TIMESTAMP WHERE id=?'
+                    cursor.execute(sql, values)
+        
+        db.commit()
+        return jsonify({'success': True, 'msg': f'保存成功 ({len(data)} 条)'})
+    except Exception as e:
+        return jsonify({'success': False, 'msg': str(e)})
+
+@app.route('/api/examinee-summary/clear', methods=['POST'])
+@admin_required
+def examinee_summary_clear():
+    """清空汇总数据"""
+    try:
+        db = get_db()
+        db.execute('DELETE FROM examinee_score_summary')
+        db.commit()
+        return jsonify({'success': True, 'msg': '已清空汇总数据'})
+    except Exception as e:
+        return jsonify({'success': False, 'msg': str(e)})
+
+@app.route('/api/examinee-summary/export')
+@admin_required
+def examinee_summary_export():
+    """导出Excel"""
+    try:
+        db = get_db()
+        df = pd.read_sql_query('SELECT * FROM examinee_score_summary ORDER BY id ASC', db)
+        
+        # 重命名列（用户指定的23列表头）
+        df.rename(columns={
+            'name': '姓名',
+            'dept_name': '部门名称',
+            'score_college_leader': '院领导评分',
+            'score_func_principal': '职能部门正职评分',
+            'score_func_deputy': '职能部门副职评分',
+            'score_func_employee': '职能部门员工评分',
+            'score_func_abc_weighted': '职能部门ABC票加权评分',
+            'score_func_bc_weighted': '职能部门BC票加权评分',
+            'score_inst_principal': '研究所正职评分',
+            'score_inst_deputy': '研究所副职评分',
+            'score_inst_employee': '研究所其他员工评分',
+            'score_inst_abc_weighted': '研究所ABC票加权评分',
+            'score_inst_bc_weighted': '研究所BC票加权评分',
+            'score_center_principal': '中心及昆冈正职评分',
+            'score_center_deputy': '中心及昆冈副职评分',
+            'score_center_kungang': '中心及昆冈（含分公司）加权',
+            'score_center_grassroot': '基层领导评分（两中心）',
+            'score_center_employee': '中心及昆冈其他员工评分',
+            'score_kungang_principal': '昆冈正职评分',
+            'score_kungang_deputy': '昆冈副职评分',
+            'score_branch_principal': '昆冈分公司正职评分',
+            'score_branch_deputy': '昆冈分公司副职评分',
+            'total_score': '总分'
+        }, inplace=True)
+        
+        # 选择输出列（用户指定的23列顺序）
+        output_cols = ['姓名', '部门名称', '院领导评分',
+                       '职能部门正职评分', '职能部门副职评分', '职能部门员工评分', 
+                       '职能部门ABC票加权评分', '职能部门BC票加权评分',
+                       '研究所正职评分', '研究所副职评分', '研究所其他员工评分', 
+                       '研究所ABC票加权评分', '研究所BC票加权评分',
+                       '中心及昆冈正职评分', '中心及昆冈副职评分', '中心及昆冈（含分公司）加权',
+                       '基层领导评分（两中心）', '中心及昆冈其他员工评分',
+                       '昆冈正职评分', '昆冈副职评分',
+                       '昆冈分公司正职评分', '昆冈分公司副职评分', '总分']
+        df = df[[c for c in output_cols if c in df.columns]]
+        
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df.to_excel(writer, index=False, sheet_name='被考核人汇总得分')
+        
+        output.seek(0)
+        return send_file(output, as_attachment=True, download_name='被考核人汇总得分.xlsx')
+    except Exception as e:
+        return str(e)
+
+
+# ==========================================
 # 6.5. API: 院领导权重配置 (Leader Weight Config)
 # ==========================================
 
@@ -4377,50 +4965,24 @@ def submit_democratic_score():
 
         for item in data_list:
 
-            examinee_id = item.get('id')
+            try:
+                examinee_id = int(item.get('id'))
+            except (ValueError, TypeError):
+                continue # Skip invalid IDs
 
             role = item.get('role') # Passed from frontend for convenience
-
             scores = item.get('scores', {})
-
             
-
             score_vals = []
-
             total = 0
-
             for d in dims:
-
                 val = float(scores.get(d, 0))
-
                 score_vals.append(val)
-
                 total += val 
-
             
-
             # Save (UPSERT)
-
-            exist = cur.execute('SELECT id FROM democratic_scores WHERE rater_account=? AND examinee_id=?',
-
-                                (rater_account, examinee_id)).fetchone()
-
-            
-
-            if exist:
-
-                # Update
-
-                set_clause = ', '.join([f"{d}=?" for d in dims])
-
-                set_clause += ", total_score=?, updated_at=CURRENT_TIMESTAMP"
-
-                params = score_vals + [total, exist['id']]
-
-                cur.execute(f'UPDATE democratic_scores SET {set_clause} WHERE id=?', params)
-
-            else:
-                # Insert
+            try:
+                # 1. Try Insert
                 # Get name for denormalization
                 mgr_row = cur.execute('SELECT name FROM middle_managers WHERE id=?', (examinee_id,)).fetchone()
                 examinee_name = mgr_row['name'] if mgr_row else 'Unknown'
@@ -4429,6 +4991,13 @@ def submit_democratic_score():
                 q = ', '.join(['?'] * len(cols))
                 vals = [rater_account, examinee_id, examinee_name, role, total] + score_vals
                 cur.execute(f'INSERT INTO democratic_scores ({", ".join(cols)}) VALUES ({q})', vals)
+            
+            except sqlite3.IntegrityError:
+                # 2. Conflict -> Update
+                set_clause = ', '.join([f"{d}=?" for d in dims])
+                set_clause += ", total_score=?, updated_at=CURRENT_TIMESTAMP"
+                params = score_vals + [total, rater_account, examinee_id]
+                cur.execute(f'UPDATE democratic_scores SET {set_clause} WHERE rater_account=? AND examinee_id=?', params)
 
                 
 
@@ -5915,5 +6484,251 @@ def account_export():
         return str(e)
 
 
+
+# ==========================================
+# 4.4 被考核人打分汇总 (Democratic Summary)
+# ==========================================
+
+# Summary Headers Configuration
+SUMMARY_HEADERS = [
+    # (Header Key, Header Display, Weight Key in DB)
+    ('college_leader', '院领导评分', '院领导'),
+    ('func_principal', '职能部门正职评分', '职能部门正职 (含院长助理)'), # Uses legacy key or new split key? Plan says '职能部门正职'
+    ('func_deputy', '职能部门副职评分', '职能部门副职'),
+    ('func_employee', '职能部门员工评分', '职能部门其他员工'),
+    ('inst_principal', '研究所正职评分', '研究所正职'),
+    ('inst_deputy', '研究所副职评分', '研究所副职'),
+    ('inst_employee', '研究所其他员工评分', '研究所其他员工'),
+    
+    # Shared Columns
+    ('center_kungang_principal', '中心及昆冈正职评分', '中心领导班子 (正职)'), # Key acts as representative
+    ('center_kungang_deputy', '中心及昆冈副职评分', '中心领导班子 (副职)'),
+    
+    ('branch_principal', '昆冈分公司正职评分', '所属分公司班子正职'),
+    ('branch_deputy', '昆冈分公司副职评分', '所属分公司班子副职')
+]
+
+# Detailed Mapping: Header Key -> List of Account Match Rules
+# Rules: List of tuples (ConstraintType, Value)
+# Constraint Types: 'dept_name', 'dept_type', 'dept_code', 'acc_type', 'acc_type_in'
+SUMMARY_MAPPING_RULES = {
+    'college_leader': [
+        {'dept_name': '院领导', 'acc_type': '院领导'}
+    ],
+    'func_principal': [
+        {'dept_type': '职能部门', 'acc_type': '正职'},
+        {'dept_name': '院长助理', 'dept_code': 'A0'} # Special Case for A0
+    ],
+    'func_deputy': [
+        {'dept_type': '职能部门', 'acc_type': '副职'}
+    ],
+    'func_employee': [
+        {'dept_type': '职能部门', 'acc_type': '员工'},
+        {'dept_type': '职能部门', 'acc_type': '其他员工'}
+    ],
+    'inst_principal': [
+        {'dept_type': '研究所', 'acc_type': '正职'}
+    ],
+    'inst_deputy': [
+        {'dept_type': '研究所', 'acc_type': '副职'}
+    ],
+    'inst_employee': [
+        {'dept_type': '研究所', 'acc_type': '员工'},
+        {'dept_type': '研究所', 'acc_type': '其他员工'}
+    ],
+    # Center + Kungang (Excluding Branch)
+    'center_kungang_principal': [
+        {'dept_type': '两中心', 'acc_type': '正职'},
+        {'dept_type': '昆冈', 'acc_type': '正职'} # Includes Kungang Beijing
+    ],
+    'center_kungang_deputy': [
+        {'dept_type': '两中心', 'acc_type': '副职'},
+        {'dept_type': '昆冈', 'acc_type': '副职'}
+    ],
+    # Branch
+    'branch_principal': [
+         {'dept_name_contains': '分公司', 'acc_type': '正职'}
+    ],
+    'branch_deputy': [
+         {'dept_name_contains': '分公司', 'acc_type': '副职'}
+    ]
+}
+
+@app.route('/admin/democratic-summary')
+@admin_required
+def democratic_summary_page():
+    return render_template('democratic_summary.html')
+
+@app.route('/api/admin/democratic-summary/data')
+@admin_required
+def democratic_summary_data():
+    db = get_db()
+    
+    # 1. Get all Examinees (Middle Managers)
+    examinees = db.execute('SELECT m.id, m.name, m.dept_name, m.role, m.dept_code, m.sort_no FROM middle_managers m ORDER BY m.dept_code, m.sort_no').fetchall()
+    
+    # 2. Get all Scores
+    sql = '''
+        SELECT s.*, 
+               a.dept_name as rater_dept_name, 
+               a.dept_code as rater_dept_code,
+               a.account_type as rater_acc_type,
+               d.dept_type as rater_dept_type
+        FROM democratic_scores s
+        LEFT JOIN evaluation_accounts a ON s.rater_account = a.username
+        LEFT JOIN department_config d ON a.dept_code = d.dept_code
+    '''
+    all_scores = db.execute(sql).fetchall()
+    
+    # Index scores by examinee_id
+    scores_by_examinee = {}
+    for s in all_scores:
+        eid = s['examinee_id']
+        if eid not in scores_by_examinee: scores_by_examinee[eid] = []
+        scores_by_examinee[eid].append(s)
+        
+    # 3. Get Weights Config (Pre-load all)
+    weight_rows = db.execute('SELECT * FROM weight_config_dept').fetchall()
+    weight_map = {}
+    for w in weight_rows:
+        e_role = w['examinee_role']
+        r_role = w['rater_role']
+        val = w['weight']
+        if e_role not in weight_map: weight_map[e_role] = {}
+        weight_map[e_role][r_role] = val
+
+    # --- NEW: Leader Individual Weights Config ---
+    # 3a. Leader Account Mapping: username -> weight_key (e.g. A0L001 -> yang_weisheng)
+    leader_map_rows = db.execute('SELECT account, leader_key FROM leader_account_mapping').fetchall()
+    leader_acc_map = {r['account']: r['leader_key'] for r in leader_map_rows}
+
+    # 3b. Leader Weights by Dept: dept_code -> { weight_key_X: val, ... }
+    # columns in leader_weight_config: id, dept_code, dept_name, total_weight, w_yang_weisheng, ...
+    leader_weight_rows = db.execute('SELECT * FROM leader_weight_config').fetchall()
+    leader_dept_weights = {} 
+    for r in leader_weight_rows:
+        d_code = r['dept_code']
+        # Convert row to dict, handling key linkage
+        # Keys in DB are 'w_yang_weisheng', but map has 'yang_weisheng'. We need to be careful.
+        leader_dept_weights[d_code] = dict(r)
+
+    # Helper to check if a score matches a rule set
+    def match_rule(score_row, rules):
+        for rule in rules:
+            match = True
+            for k, v in rule.items():
+                if k == 'dept_name' and score_row['rater_dept_name'] != v: match = False; break
+                if k == 'dept_type' and score_row['rater_dept_type'] != v: match = False; break
+                if k == 'dept_code': # Exact match or 'A0' special
+                    if v == 'A0' and score_row['rater_dept_code'] == 'A0': pass
+                    elif score_row['rater_dept_code'] != v: match = False; break
+                if k == 'acc_type':
+                    actual = score_row['rater_acc_type']
+                    if actual != v and actual not in ['P','D','L','E','C']: 
+                         if v=='正职' and actual=='P': pass
+                         elif v=='副职' and actual=='D': pass
+                         elif v=='院领导' and actual=='L': pass
+                         elif (v=='员工' or v=='其他员工') and actual=='E': pass
+                         elif v=='职工代表' and actual=='C': pass
+                         else: match = False; break
+                
+                if k == 'dept_name_contains' and v not in (score_row['rater_dept_name'] or ''): match = False; break
+                
+            if match: return True
+        return False
+
+    # 4. Process Each Examinee
+    results = []
+    
+    for ex in examinees:
+        eid = ex['id']
+        # Determine Config Role (for Weight Lookup)
+        real_config_role = ex['role'] 
+        if ex['dept_name'] == '院长助理': real_config_role = '院长助理'
+        elif '职能' in str(ex['dept_name']) and '正职' in ex['role']: real_config_role = '职能部门正职'
+        
+        my_weights = weight_map.get(real_config_role)
+        if not my_weights:
+            if '院长助理' in str(ex['dept_name']): my_weights = weight_map.get('院长助理', {})
+            elif '正职' in str(ex['role']) and '因为' not in str(ex['role']): pass
+        if not my_weights: my_weights = {}
+
+        my_scores = scores_by_examinee.get(eid, [])
+        my_dept_code = ex['dept_code'] # For leader weight lookup
+
+        row_data = {
+            'id': eid,
+            'name': ex['name'],
+            'dept_name': ex['dept_name'],
+            'total_score': 0
+        }
+        
+        current_total = 0
+        
+        # Calculate Columns
+        for col_key, col_name, weight_db_key in SUMMARY_HEADERS:
+            mapping_rules = SUMMARY_MAPPING_RULES.get(col_key, [])
+            
+            # Find matching scores
+            matched_scores_objs = [s for s in my_scores if match_rule(s, mapping_rules)]
+            matched_vals = [s['total_score'] for s in matched_scores_objs]
+            
+            count = len(matched_vals)
+            avg = sum(matched_vals) / count if count > 0 else 0
+            
+            weighted_score = 0
+            w_display = 0 
+            
+            # --- Special Logic for College Leader ---
+            if col_key == 'college_leader':
+                # Individual Weight Calculation
+                # Sum( Score * IndividualWeight% )
+                # Find weights for this examinee's department
+                l_weights = leader_dept_weights.get(my_dept_code, {})
+                
+                sum_weighted = 0
+                total_w_used = 0
+                
+                for s_obj in matched_scores_objs:
+                    rater_acc = s_obj['rater_account']
+                    w_key_base = leader_acc_map.get(rater_acc) # e.g. 'yang_weisheng'
+                    
+                    if w_key_base:
+                        # DB column is 'w_' + key
+                        w_col = 'w_' + w_key_base
+                        ind_w = l_weights.get(w_col, 0)
+                    else:
+                        ind_w = 0 # No mapping?
+                        
+                    sum_weighted += s_obj['total_score'] * (ind_w / 100.0)
+                    total_w_used += ind_w
+                
+                weighted_score = sum_weighted
+                w_display = total_w_used # Show total weight applied (e.g. 70 or 40+6+...)
+                
+            else:
+                # Standard Logic
+                w_val = my_weights.get(weight_db_key, 0)
+                weighted_score = avg * (w_val / 100.0)
+                w_display = w_val
+            
+            row_data[col_key] = {
+                'avg': round(avg, 2),
+                'count': count,
+                'weight': w_display,
+                'weighted_score': weighted_score
+            }
+            
+            # Add to total ONLY if count>0 or specifically expected?
+            # Usually only if scores exist. 
+            # Exception: if weight is set but no scores, it's 0.
+            current_total += weighted_score
+                
+        row_data['final_total'] = round(current_total, 2)
+        results.append(row_data)
+        
+    return jsonify({'code': 0, 'data': results})
+
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
+
