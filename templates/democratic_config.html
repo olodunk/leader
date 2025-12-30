@@ -16,10 +16,15 @@
         </div>
         <div class="col-auto ms-auto d-print-none">
             <div class="btn-list">
-                <button class="btn btn-primary d-none d-sm-inline-block" onclick="saveConfig()">
-                    <i class="ti ti-device-floppy"></i>
-                    保存配置
+                <button id="btn-edit" class="btn btn-primary" onclick="toggleEditMode(true)">
+                    <i class="ti ti-pencil me-2"></i>编辑
                 </button>
+                <div id="action-group" style="display: none;">
+                    <button class="btn btn-ghost-danger me-2" onclick="cancelEdit()">取消</button>
+                    <button class="btn btn-primary" onclick="saveConfig()">
+                        <i class="ti ti-device-floppy me-2"></i>保存
+                    </button>
+                </div>
             </div>
         </div>
     </div>
@@ -50,7 +55,7 @@
                                 style="height: 100%; width: 100%; min-height: 40px;">
                                 <input class="form-check-input m-0 config-checkbox" type="checkbox"
                                     data-rater="{{ rater }}" data-examinee="{{ examinee }}" {% if allowed==1 %}checked{%
-                                    endif %} onclick="event.stopPropagation()">
+                                    endif %} onclick="event.stopPropagation()" disabled>
                             </div>
                         </td>
                         {% endfor %}
@@ -90,7 +95,26 @@
 </style>
 
 <script>
+    let isEditMode = false;
+
+    function toggleEditMode(isEdit) {
+        isEditMode = isEdit;
+        document.querySelectorAll('.config-checkbox').forEach(el => el.disabled = !isEdit);
+        document.getElementById('btn-edit').style.display = isEdit ? 'none' : 'inline-block';
+        document.getElementById('action-group').style.display = isEdit ? 'inline-block' : 'none';
+
+        // Adjust cursor style for cells
+        document.querySelectorAll('.class-selector-cell').forEach(el => {
+            el.style.cursor = isEdit ? 'pointer' : 'default';
+        });
+    }
+
+    function cancelEdit() {
+        if (confirm('取消将丢失未保存的修改，确定吗？')) window.location.reload();
+    }
+
     function toggleCell(td) {
+        if (!isEditMode) return;
         const checkbox = td.querySelector('input[type="checkbox"]');
         checkbox.checked = !checkbox.checked;
     }

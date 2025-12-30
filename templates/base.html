@@ -21,6 +21,30 @@
       /* 强制显示滚动条，防止布局抖动 */
     }
 
+    /* 侧边栏宽度优化：246px */
+    @media (min-width: 992px) {
+      .navbar-vertical.navbar-expand-lg {
+        width: 246px;
+        max-width: 246px;
+      }
+
+      .page-wrapper {
+        margin-left: 246px;
+      }
+    }
+
+    .navbar-vertical {
+      overflow-x: hidden;
+    }
+
+    /* 菜单文字禁止换行，超出部分显示省略号 */
+    .navbar-vertical .nav-link-title,
+    .navbar-vertical .dropdown-item {
+      white-space: nowrap !important;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
     /* 侧边栏激活样式 */
     .navbar-vertical .nav-item.active .nav-link {
       background-color: rgba(32, 107, 196, 0.06);
@@ -174,6 +198,43 @@
   </div>
 
   <script src="{{ url_for('static', filename='js/tabler.min.js') }}"></script>
+  <script>
+    // 侧边栏菜单状态持久化
+    document.addEventListener("DOMContentLoaded", function () {
+      const STORAGE_KEY = 'sidebar-dropdown-states';
+
+      // 1. 从 localStorage 恢复状态
+      const savedStates = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+      Object.keys(savedStates).forEach(href => {
+        if (savedStates[href]) {
+          const trigger = document.querySelector(`[href="${href}"]`);
+          if (trigger) {
+            const menu = trigger.nextElementSibling;
+            if (menu && menu.classList.contains('dropdown-menu')) {
+              trigger.classList.add('show');
+              trigger.setAttribute('aria-expanded', 'true');
+              menu.classList.add('show');
+            }
+          }
+        }
+      });
+
+      // 2. 监听点击以保存状态
+      const dropdownToggles = document.querySelectorAll('.navbar-vertical .dropdown-toggle');
+      dropdownToggles.forEach(toggle => {
+        toggle.addEventListener('click', function () {
+          // 稍微延迟以等待 Tabler/Bootstrap 切换完成
+          setTimeout(() => {
+            const href = this.getAttribute('href');
+            const isOpen = this.classList.contains('show');
+            const currentStates = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+            currentStates[href] = isOpen;
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(currentStates));
+          }, 150);
+        });
+      });
+    });
+  </script>
   {% block script_extra %}{% endblock %}
 </body>
 

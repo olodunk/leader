@@ -95,9 +95,17 @@
             <div class="text-muted mt-1">请配置各角色打分权重，纵向总和必须为 100%</div>
         </div>
         <div class="col-auto ms-auto">
-            <button class="btn btn-primary" onclick="saveWeights()">
-                <i class="ti ti-device-floppy me-2"></i>保存配置
-            </button>
+            <div class="btn-list">
+                <button id="btn-edit" class="btn btn-primary" onclick="toggleEditMode(true)">
+                    <i class="ti ti-pencil me-2"></i>编辑
+                </button>
+                <div id="action-group" style="display: none;">
+                    <button class="btn btn-ghost-danger me-2" onclick="cancelEdit()">取消</button>
+                    <button class="btn btn-primary" onclick="saveWeights()">
+                        <i class="ti ti-device-floppy me-2"></i>保存
+                    </button>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -181,7 +189,7 @@
                         {% set val = matrix.get((col, row), 0) %}
                         <td class="{% if val > 0 %}bg-light{% endif %}">
                             <input type="number" class="w-input" data-col="{{ col }}" data-row="{{ row }}"
-                                value="{{ val }}" oninput="calculateTotals()" step="0.5">
+                                value="{{ val }}" oninput="calculateTotals()" step="0.5" readonly>
                             <span class="d-none text-muted">%</span>
                         </td>
                         {% endfor %}
@@ -208,6 +216,22 @@
         bindSharedInputs();
         calculateTotals();
     });
+
+    function toggleEditMode(isEdit) {
+        document.querySelectorAll('input.w-input').forEach(el => el.readOnly = !isEdit);
+        document.getElementById('btn-edit').style.display = isEdit ? 'none' : 'inline-block';
+        document.getElementById('action-group').style.display = isEdit ? 'inline-block' : 'none';
+
+        // Add visual cue for editability
+        document.querySelectorAll('input.w-input').forEach(el => {
+            el.style.backgroundColor = isEdit ? '#fff' : 'transparent';
+            el.style.boxShadow = isEdit ? 'inset 0 0 0 1px #dce1e7' : 'none';
+        });
+    }
+
+    function cancelEdit() {
+        if (confirm('取消将丢失未保存的修改，确定吗？')) window.location.reload();
+    }
 
     // Configuration for Shared Weight Groups
     // For each Target Column (examinee), specify which Rater Rows share the weight.

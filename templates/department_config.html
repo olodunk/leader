@@ -94,16 +94,17 @@
                 <input type="file" id="excelFile" accept=".xls,.xlsx" style="display: none;" onchange="uploadFile()">
 
                 <button class="btn btn-white" onclick="document.getElementById('excelFile').click()">
-                    <i class="ti ti-upload me-2"></i>导入配置表
-                </button>
-                <button class="btn btn-white" onclick="exportData()">
-                    <i class="ti ti-download me-2"></i>导出
+                    <i class="ti ti-upload me-2"></i>导入
                 </button>
 
                 <div class="vr mx-2"></div>
 
                 <button id="btn-edit" class="btn btn-primary" onclick="toggleEditMode(true)">
-                    <i class="ti ti-pencil me-2"></i>开启编辑
+                    <i class="ti ti-pencil me-2"></i>编辑
+                </button>
+
+                <button class="btn btn-white" onclick="exportData()">
+                    <i class="ti ti-download me-2"></i>导出Excel
                 </button>
 
                 <div id="action-group" style="display: none;">
