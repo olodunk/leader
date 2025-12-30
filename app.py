@@ -1151,7 +1151,7 @@ def examinee_summary_calculate():
         # 1. 获取要计算的被考核人
         examinees = db.execute('''
             SELECT id, name, dept_name, role, dept_code FROM middle_managers 
-            WHERE role IN ('院长助理', '职能部门正职', '职能部门副职', '研究所正职', '研究所副职', '两中心正职', '中心正职') ORDER BY id ASC
+            WHERE role IN ('院长助理', '职能部门正职', '职能部门副职', '研究所正职', '研究所副职', '两中心正职', '中心正职', '中心副职') ORDER BY id ASC
         ''').fetchall()
         
         if not examinees:
@@ -1175,6 +1175,7 @@ def examinee_summary_calculate():
         # 5. 清空并重新计算
         cursor.execute('DELETE FROM examinee_score_summary')
         
+        inserted_count = 0
         for examinee in examinees:
             eid = examinee['id']
             name = examinee['name']
@@ -1182,9 +1183,10 @@ def examinee_summary_calculate():
             role = examinee['role']
             dept_code = examinee['dept_code']
             
-            # 过滤：如果是'中心正职'或'两中心正职'，必须属于两中心，排除昆冈分公司
-            if role in ['两中心正职', '中心正职'] and dept_name not in ['兰州化工研究中心', '大庆化工研究中心']:
-                continue
+            # 过滤：如果是'中心正职'、'两中心正职'或'中心副职'，必须属于两中心或昆冈北京
+            if role in ['两中心正职', '中心正职', '中心副职']:
+                if dept_name not in ['兰州化工研究中心', '大庆化工研究中心'] and dept_code not in ['U', 'V', 'W']:
+                    continue
             
             # 获取院领导权重配置（根据被考核人所属部门）
             # 院长助理 -> dept_code='A1', 职能部门正职 -> 根据dept_name查找
@@ -1237,6 +1239,31 @@ def examinee_summary_calculate():
             center_grassroots_scores = []  # 两中心基层领导
             center_employee_scores = []  # 两中心其他员工
             
+            # 昆冈北京专用列表
+            kungang_principal_scores = []      # 昆冈班子正职 (U, V, W)
+            kungang_deputy_scores = []         # 昆冈班子副职 (U)
+            kungang_beijing_grassroots = []
+            kungang_beijing_employees = []
+            
+            # 分公司 (V, W) 专有列表
+            branch_principal_scores = []
+            branch_deputy_scores = []
+            branch_leadership_pooled_scores = [] # 正职+副职合并用于加权
+            branch_grassroots_scores = []
+            branch_employee_scores = []
+            
+            score_college_leader = 0
+            score_func_principal = score_func_deputy = score_func_employee = 0
+            score_func_abc = score_func_bc = 0
+            score_inst_principal = score_inst_deputy = score_inst_employee = 0
+            score_inst_abc = score_inst_bc = 0
+            score_center_principal = score_center_deputy = score_center_grassroot = score_center_employee = 0
+            score_center_kungang = 0
+            score_kungang_principal = score_kungang_deputy = score_branch_principal = score_branch_deputy = 0
+            score_branch_weighted = 0 # 新增加权字段
+            _w_branch_principal = _w_center_grassroot = _w_center_employee = 0
+            total_score = 0
+
             for sd in examinee_scores_raw:
                 rater_acc = sd['rater_account']
                 score = sd['score'] or 0
@@ -1290,15 +1317,23 @@ def examinee_summary_calculate():
                 
                 # 两中心正职 + 昆冈分公司正职
                 if acc_type == '正职':
-                    if acc_dept_name in ['兰州化工研究中心', '大庆化工研究中心'] or ('昆冈' in acc_dept_name and '分公司' in acc_dept_name):
+                    if acc_dept_name in ['兰州化工研究中心', '大庆化工研究中心']:
                         center_kungang_scores.append(score)
                         continue
+                    if '昆冈' in acc_dept_name and '分公司' in acc_dept_name:
+                         # 同时也加入 center_kungang_scores (两中心正职需用到)
+                         center_kungang_scores.append(score)
+                         # 不continue，让后续昆冈专用逻辑也能捕获
                 
                 # 两中心副职 + 昆冈分公司副职
+                # 两中心副职 + 昆冈分公司副职
                 if acc_type == '副职':
-                    if acc_dept_name in ['兰州化工研究中心', '大庆化工研究中心'] or ('昆冈' in acc_dept_name and '分公司' in acc_dept_name):
+                    if acc_dept_name in ['兰州化工研究中心', '大庆化工研究中心']:
                         center_kungang_deputy_scores.append(score)
                         continue
+                    if '昆冈' in acc_dept_name and '分公司' in acc_dept_name:
+                        center_kungang_deputy_scores.append(score)
+                        # 不continue
                 
                 # 两中心基层领导
                 if acc_type == '中心基层领导' and acc_dept_name in ['兰州化工研究中心', '大庆化工研究中心']:
@@ -1309,7 +1344,46 @@ def examinee_summary_calculate():
                 if acc_type == '其他员工' and acc_dept_name in ['兰州化工研究中心', '大庆化工研究中心']:
                          center_employee_scores.append(score)
                          continue
-            
+
+                # 昆冈相关账号分类 (U, V, W)
+                acc_dept_code = acc.get('dept_code', '')
+                if acc_dept_code in ['U', 'V', 'W']:
+                    # 昆冈班子正职 (U, V, W)
+                    if acc_type == '正职':
+                        # 如果是U，计入大班子正职
+                        if acc_dept_code == 'U':
+                            kungang_principal_scores.append(score)
+                        # 如果是V, W，计入分公司正职
+                        if acc_dept_code in ['V', 'W']:
+                            branch_principal_scores.append(score)
+                            branch_leadership_pooled_scores.append(score)
+                        continue
+                    
+                    # 昆冈班子副职 (U, V, W)
+                    if acc_type == '副职':
+                        if acc_dept_code == 'U':
+                            kungang_deputy_scores.append(score)
+                        if acc_dept_code in ['V', 'W']:
+                            branch_deputy_scores.append(score)
+                            branch_leadership_pooled_scores.append(score)
+                        continue
+                        
+                    # 昆冈基层领导 (U, V, W)
+                    if acc_type == '中心基层领导':
+                        if acc_dept_code == 'U':
+                            kungang_beijing_grassroots.append(score)
+                        if acc_dept_code in ['V', 'W']:
+                            branch_grassroots_scores.append(score)
+                        continue
+                        
+                    # 昆冈其他员工 (U, V, W)
+                    if acc_type == '其他员工':
+                        if acc_dept_code == 'U':
+                            kungang_beijing_employees.append(score)
+                        if acc_dept_code in ['V', 'W']:
+                            branch_employee_scores.append(score)
+                        continue
+
             # ===== 计算各项得分 =====
             
             # 1. 院领导评分 = Σ(院领导i的评分 × 院领导i的个人权重%)
@@ -1453,13 +1527,6 @@ def examinee_summary_calculate():
                 score_func_principal = 0
                 score_func_deputy = 0
                 score_func_employee = 0
-                score_func_abc = 0
-                score_func_bc = 0
-                score_center_kungang = 0
-                score_center_principal = 0
-                score_center_deputy = 0
-                score_center_grassroot = 0
-                score_center_employee = 0
                 
                 # 总分 = 院领导 + 研究所正职加权 + BC加权
                 total_score = score_college_leader + score_inst_principal + score_inst_bc
@@ -1486,38 +1553,143 @@ def examinee_summary_calculate():
                 all_center_kungang = center_kungang_scores + center_kungang_deputy_scores
                 score_center_kungang = (sum(all_center_kungang) / len(all_center_kungang) * 0.10) if all_center_kungang else 0
                 
-                score_func_deputy = 0
-                score_func_employee = 0
-                score_func_abc = 0
-                score_func_bc = 0
-                
-                score_inst_principal = 0
-                score_inst_deputy = 0
-                score_inst_employee = 0
-                score_inst_abc = 0
-                score_inst_bc = 0
+                # 中心及昆冈加权 = (所有两中心,昆冈分公司正副职)平均分 × 10% (共享10%)
+                all_center_kungang = center_kungang_scores + center_kungang_deputy_scores
+                score_center_kungang = (sum(all_center_kungang) / len(all_center_kungang) * 0.10) if all_center_kungang else 0
                 
                 # 总分 = 院领导 + 职能正职 + 中心加权 + 基层领导 + 其他员工
                 total_score = score_college_leader + score_func_principal + score_center_kungang + score_center_grassroot + score_center_employee
 
+            elif role == '中心副职' and dept_name in ['兰州化工研究中心', '大庆化工研究中心']:
+                # === 中心副职计算逻辑 ===
+                # 1. 院领导评分 (score_college_leader) 已在上方通用逻辑中计算完毕（权重50%）
+
+                # 2. 中心及昆冈正职评分 (权重 20%)
+                # 原始分数用于展示
+                score_center_principal = (sum(center_kungang_scores) / len(center_kungang_scores)) if center_kungang_scores else 0
+                _score_center_principal_weighted = score_center_principal * 0.20
+
+                # 3. 中心及昆冈副职评分 (权重 10%)
+                # 原始分数用于展示
+                score_center_deputy = (sum(center_kungang_deputy_scores) / len(center_kungang_deputy_scores)) if center_kungang_deputy_scores else 0
+                _score_center_deputy_weighted = score_center_deputy * 0.10
+
+                # 4. 基层领导评分（两中心） (权重 10%)
+                # 原始分数用于展示
+                _score_center_grassroot_avg = (sum(center_grassroots_scores) / len(center_grassroots_scores)) if center_grassroots_scores else 0
+                score_center_grassroot = _score_center_grassroot_avg * 0.10
+
+                # 5. 中心及昆冈其他员工评分 (权重 10%)
+                # 原始分数用于展示
+                _score_center_employee_avg = (sum(center_employee_scores) / len(center_employee_scores)) if center_employee_scores else 0
+                score_center_employee = _score_center_employee_avg * 0.10
+
+                # 总分 = 院领导加权 + 正职加权 + 副职加权 + 基层加权 + 其他员工加权
+                total_score = score_college_leader + _score_center_principal_weighted + _score_center_deputy_weighted + score_center_grassroot + score_center_employee
+
+            elif role == '中心副职' and dept_code == 'U':
+                # === 昆冈班子副职 (北京) 计算逻辑 ===
+                # 1. 院领导 (20%) - 已计算
+
+                # 2. 中心及昆冈正职评分 (40%) -> 来源: 昆冈班子正职 (U, V, W)
+                score_center_principal = (sum(kungang_principal_scores) / len(kungang_principal_scores)) if kungang_principal_scores else 0
+                _w_center_principal = score_center_principal * 0.40
+
+                # 3. 中心及昆冈副职评分 (10%) -> 来源: 昆冈班子副职 (U)
+                score_center_deputy = (sum(kungang_deputy_scores) / len(kungang_deputy_scores)) if kungang_deputy_scores else 0
+                _w_center_deputy = score_center_deputy * 0.10
+
+                # 4. 昆冈分公司正职评分 (10%) -> 来源: 昆冈分公司正职 (V, W)
+                # 存入 score_branch_principal (存储加权分)
+                _score_branch_principal_raw = (sum(branch_principal_scores) / len(branch_principal_scores)) if branch_principal_scores else 0
+                score_branch_principal = _score_branch_principal_raw * 0.10
+                _w_branch_principal = score_branch_principal # Keep for compatibility if used elsewhere
+
+                # 5. 基层领导评分（两中心及昆冈） (10%) -> 来源: 昆冈北京基层领导 (U)
+                # 复用 score_center_grassroot (存储加权分)
+                _score_center_grassroot_raw = (sum(kungang_beijing_grassroots) / len(kungang_beijing_grassroots)) if kungang_beijing_grassroots else 0
+                score_center_grassroot = _score_center_grassroot_raw * 0.10
+                
+                # 6. 中心及昆冈其他员工评分 (10%) -> 来源: 昆冈北京其他员工 (U)
+                # 复用 score_center_employee (存储加权分)
+                _score_center_employee_raw = (sum(kungang_beijing_employees) / len(kungang_beijing_employees)) if kungang_beijing_employees else 0
+                score_center_employee = _score_center_employee_raw * 0.10
+
+                total_score = score_college_leader + _w_center_principal + _w_center_deputy + score_branch_principal + score_center_grassroot + score_center_employee
+                # 注意: score_branch_principal 需要在 INSERT SQL 中有对应列
+
+            elif role == '中心正职' and dept_code in ['V', 'W']:
+                # === 昆冈所属分公司 (兰州/抚顺) 班子正职计算逻辑 ===
+                # 1. 院领导 (10%) - 已计算
+                
+                # 2. 职能部门正职评分 (10%) -> 含院长助理
+                _all_func = func_principal_scores + func_assistant_scores
+                score_func_principal = ((sum(_all_func) / len(_all_func)) * 0.10) if _all_func else 0
+                
+                # 3. 昆冈班子正职评分 (30%) -> 仅 U
+                _kungang_p_avg = (sum(kungang_principal_scores) / len(kungang_principal_scores)) if kungang_principal_scores else 0
+                score_kungang_principal = _kungang_p_avg * 0.30
+                
+                # 4. 昆冈班子副职评分 (10%) -> 仅 U
+                _kungang_d_avg = (sum(kungang_deputy_scores) / len(kungang_deputy_scores)) if kungang_deputy_scores else 0
+                score_kungang_deputy = _kungang_d_avg * 0.10
+                
+                # 5. 分公司正职 & 副职 原始分展示
+                score_branch_principal = (sum(branch_principal_scores) / len(branch_principal_scores)) if branch_principal_scores else 0
+                score_branch_deputy = (sum(branch_deputy_scores) / len(branch_deputy_scores)) if branch_deputy_scores else 0
+                
+                # 6. 昆冈分公司加权 (10%) -> 正副职共享
+                _branch_joint_avg = (sum(branch_leadership_pooled_scores) / len(branch_leadership_pooled_scores)) if branch_leadership_pooled_scores else 0
+                score_branch_weighted = _branch_joint_avg * 0.10
+                
+                # 7. 基层领导评分 (20%) -> 来源: 分公司基层
+                _branch_grass_avg = (sum(branch_grassroots_scores) / len(branch_grassroots_scores)) if branch_grassroots_scores else 0
+                score_center_grassroot = _branch_grass_avg * 0.20
+                
+                # 8. 中心及昆冈其他员工评分 (10%) -> 来源: 分公司员工
+                _branch_emp_avg = (sum(branch_employee_scores) / len(branch_employee_scores)) if branch_employee_scores else 0
+                score_center_employee = _branch_emp_avg * 0.10
+                
+                total_score = score_college_leader + score_func_principal + score_kungang_principal + score_kungang_deputy + score_branch_weighted + score_center_grassroot + score_center_employee
+
+            elif role == '中心副职' and dept_code in ['V', 'W']:
+                # === 昆冈所属分公司 (兰州/抚顺) 班子副职 ===
+                # 1. 院领导 (0%) - 用户指定
+                score_college_leader = 0
+                
+                # 2. 昆冈班子正职评分 (30%) -> 仅 U
+                _kungang_p_avg = (sum(kungang_principal_scores) / len(kungang_principal_scores)) if kungang_principal_scores else 0
+                score_kungang_principal = _kungang_p_avg * 0.30
+                
+                # 3. 昆冈班子副职评分 (10%) -> 仅 U
+                _kungang_d_avg = (sum(kungang_deputy_scores) / len(kungang_deputy_scores)) if kungang_deputy_scores else 0
+                score_kungang_deputy = _kungang_d_avg * 0.10
+                
+                # 4. 分公司正职评分 (30%) -> V/W
+                _branch_p_avg = (sum(branch_principal_scores) / len(branch_principal_scores)) if branch_principal_scores else 0
+                score_branch_principal = _branch_p_avg * 0.30
+                
+                # 5. 分公司副职评分 (10%) -> V/W
+                _branch_d_avg = (sum(branch_deputy_scores) / len(branch_deputy_scores)) if branch_deputy_scores else 0
+                score_branch_deputy = _branch_d_avg * 0.10
+                
+                # 6. 基层领导评分 (10%) -> 分公司基层
+                _branch_grass_avg = (sum(branch_grassroots_scores) / len(branch_grassroots_scores)) if branch_grassroots_scores else 0
+                score_center_grassroot = _branch_grass_avg * 0.10
+                
+                # 7. 员工评分 (10%) -> 分公司员工
+                _branch_emp_avg = (sum(branch_employee_scores) / len(branch_employee_scores)) if branch_employee_scores else 0
+                score_center_employee = _branch_emp_avg * 0.10
+                
+                # 不使用的字段置0
+                score_func_principal = 0
+                score_branch_weighted = 0
+                
+                total_score = score_college_leader + score_kungang_principal + score_kungang_deputy + score_branch_principal + score_branch_deputy + score_center_grassroot + score_center_employee
+
             else:
                  # 其他角色暂未实现
                  total_score = 0
-                 score_func_principal = 0
-                 score_func_deputy = 0
-                 score_func_employee = 0
-                 score_func_abc = 0
-                 score_func_bc = 0
-                 score_inst_principal = 0
-                 score_inst_deputy = 0
-                 score_inst_employee = 0
-                 score_inst_abc = 0
-                 score_inst_bc = 0
-                 score_center_principal = 0
-                 score_center_deputy = 0
-                 score_center_grassroot = 0
-                 score_center_employee = 0
-                 score_center_kungang = 0
             
             cursor.execute('''
                 INSERT INTO examinee_score_summary (
@@ -1528,8 +1700,11 @@ def examinee_summary_calculate():
                     score_inst_principal, score_inst_deputy, score_inst_employee,
                     score_inst_abc_weighted, score_inst_bc_weighted, 
                     score_center_principal, score_center_deputy, score_center_grassroot, score_center_employee,
-                    score_center_kungang, total_score
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    score_center_kungang, 
+                    score_kungang_principal, score_kungang_deputy, score_branch_principal, score_branch_deputy,
+                    total_score,
+                    score_branch_weighted
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 eid, name, dept_name,
                 score_college_leader,
@@ -1538,15 +1713,31 @@ def examinee_summary_calculate():
                 score_inst_principal, score_inst_deputy, score_inst_employee,
                 score_inst_abc, score_inst_bc,
                 score_center_principal, score_center_deputy, score_center_grassroot, score_center_employee,
-                score_center_kungang, total_score
+                score_center_kungang, 
+                score_kungang_principal, score_kungang_deputy, score_branch_principal, score_branch_deputy,
+                total_score,
+                score_branch_weighted
             ))
+            inserted_count += 1
         
         db.commit()
-        return jsonify({'success': True, 'msg': f'计算完成，已生成 {len(examinees)} 条记录'})
+        return jsonify({'success': True, 'msg': f'计算完成，已生成 {inserted_count} 条记录'})
         
     except Exception as e:
         import traceback
         traceback.print_exc()
+        return jsonify({'success': False, 'msg': str(e)})
+
+@app.route('/api/examinee-summary/clear', methods=['POST'])
+@admin_required
+def examinee_summary_clear():
+    """清空汇总得分数据"""
+    try:
+        db = get_db()
+        db.execute('DELETE FROM examinee_score_summary')
+        db.commit()
+        return jsonify({'success': True, 'msg': '已清空所有汇总数据'})
+    except Exception as e:
         return jsonify({'success': False, 'msg': str(e)})
 
 def _get_rater_roles_simple(acc_info):
@@ -1638,17 +1829,6 @@ def examinee_summary_save():
     except Exception as e:
         return jsonify({'success': False, 'msg': str(e)})
 
-@app.route('/api/examinee-summary/clear', methods=['POST'])
-@admin_required
-def examinee_summary_clear():
-    """清空汇总数据"""
-    try:
-        db = get_db()
-        db.execute('DELETE FROM examinee_score_summary')
-        db.commit()
-        return jsonify({'success': True, 'msg': '已清空汇总数据'})
-    except Exception as e:
-        return jsonify({'success': False, 'msg': str(e)})
 
 @app.route('/api/examinee-summary/export')
 @admin_required

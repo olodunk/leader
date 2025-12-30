@@ -64,8 +64,14 @@
 
         <div class="col-auto ms-auto d-print-none d-flex align-items-center gap-2">
             <button class="btn btn-primary" onclick="calculateScores()">
-                <i class="ti ti-calculator me-2"></i>计算
+                <i class="ti ti-calculator me-2"></i>一键计算
             </button>
+            <button class="btn btn-ghost-danger" onclick="clearScores()">
+                <i class="ti ti-trash me-2"></i>一键清空
+            </button>
+
+            <div class="vr mx-1"></div>
+
             <button id="btn-edit" class="btn btn-primary" onclick="toggleEditMode(true)">
                 <i class="ti ti-pencil me-2"></i>编辑
             </button>
@@ -73,6 +79,7 @@
                 <button class="btn btn-ghost-danger me-2" onclick="cancelEdit()">取消</button>
                 <button class="btn btn-primary" onclick="saveData()">保存</button>
             </div>
+
             <button class="btn btn-white" onclick="exportData()">
                 <i class="ti ti-download me-2"></i>导出Excel
             </button>
@@ -101,18 +108,19 @@
                         <th>中心及昆冈正职评分</th>
                         <th>中心及昆冈副职评分</th>
                         <th>中心及昆冈（含分公司）加权</th>
-                        <th>基层领导评分（两中心）</th>
+                        <th>基层领导评分（两中心及昆冈）</th>
                         <th>中心及昆冈其他员工评分</th>
                         <th>昆冈正职评分</th>
                         <th>昆冈副职评分</th>
                         <th>昆冈分公司正职评分</th>
                         <th>昆冈分公司副职评分</th>
+                        <th>昆冈分公司加权</th>
                         <th>总分</th>
                     </tr>
                 </thead>
                 <tbody id="table-body">
                     <tr>
-                        <td colspan="23" class="text-center py-5 text-muted">点击"计算"生成数据</td>
+                        <td colspan="24" class="text-center py-5 text-muted">点击"一键计算"生成数据</td>
                     </tr>
                 </tbody>
             </table>
@@ -135,7 +143,7 @@
         'score_center_principal', 'score_center_deputy', 'score_center_kungang',
         'score_center_grassroot', 'score_center_employee',
         'score_kungang_principal', 'score_kungang_deputy',
-        'score_branch_principal', 'score_branch_deputy',
+        'score_branch_principal', 'score_branch_deputy', 'score_branch_weighted',
         'total_score'
     ];
 
@@ -158,7 +166,7 @@
         const tbody = document.getElementById('table-body');
 
         if (!data || data.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="23" class="text-center py-5 text-muted">暂无数据，请点击"计算"生成</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="23" class="text-center py-5 text-muted">暂无数据，请点击"一键计算"生成</td></tr>';
             return;
         }
 
@@ -197,7 +205,7 @@
     }
 
     async function calculateScores() {
-        if (!confirm('确定重新计算汇总得分吗？')) return;
+        if (!confirm('确定开始一键计算汇总得分吗？')) return;
         document.body.style.cursor = 'wait';
         try {
             const res = await (await fetch('/api/examinee-summary/calculate', { method: 'POST' })).json();
@@ -207,6 +215,17 @@
             alert('计算失败: ' + e);
         } finally {
             document.body.style.cursor = 'default';
+        }
+    }
+
+    async function clearScores() {
+        if (!confirm('确定清空所有汇总数据吗？此操作无法撤销。')) return;
+        try {
+            const res = await (await fetch('/api/examinee-summary/clear', { method: 'POST' })).json();
+            alert(res.msg);
+            if (res.success) loadData();
+        } catch (e) {
+            alert('清空失败: ' + e);
         }
     }
 
