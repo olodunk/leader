@@ -148,7 +148,8 @@
             </li>
 
             {% set stats_active = request.endpoint in ['team_score_details', 'democratic_score_details',
-            'examinee_summary_page'] %}
+            'examinee_summary_page', 'recommendation_details_principal', 'recommendation_details_deputy',
+            'recommendation_summary_principal', 'recommendation_summary_deputy'] %}
             <li class="nav-item dropdown">
               <a class="nav-link dropdown-toggle {% if stats_active %}show{% endif %}" href="#navbar-stats"
                 data-bs-toggle="dropdown" data-bs-auto-close="false" role="button"
@@ -166,8 +167,14 @@
                       href="{{ url_for('examinee_summary_page') }}">被考核人汇总得分</a>
                     <a class="dropdown-item {% if request.endpoint == 'democratic_score_details' %}active{% endif %}"
                       href="{{ url_for('democratic_score_details') }}">被考核人打分明细</a>
-                    <a class="dropdown-item" href="#">后备干部推荐（正职）汇总</a>
-                    <a class="dropdown-item" href="#">后备干部推荐（副职）汇总</a>
+                    <a class="dropdown-item {% if request.endpoint == 'recommendation_summary_principal' %}active{% endif %}"
+                      href="{{ url_for('recommendation_summary_principal') }}">后备干部推荐（正职）汇总</a>
+                    <a class="dropdown-item {% if request.endpoint == 'recommendation_summary_deputy' %}active{% endif %}"
+                      href="{{ url_for('recommendation_summary_deputy') }}">后备干部推荐（副职）汇总</a>
+                    <a class="dropdown-item {% if request.endpoint == 'recommendation_details_principal' %}active{% endif %}"
+                      href="{{ url_for('recommendation_details_principal') }}">后备干部推荐（正职）明细</a>
+                    <a class="dropdown-item {% if request.endpoint == 'recommendation_details_deputy' %}active{% endif %}"
+                      href="{{ url_for('recommendation_details_deputy') }}">后备干部推荐（副职）明细</a>
                     <a class="dropdown-item" href="#">新提拔任用干部民主评议表</a>
                     <a class="dropdown-item" href="#">干部选拔任用工作民主评议表</a>
                   </div>

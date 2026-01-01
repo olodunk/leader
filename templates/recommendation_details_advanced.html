@@ -1,0 +1,378 @@
+{% extends "base.html" %}
+
+{% block head_extra %}
+<style>
+    /* 样式与 democratic_score_details.html 保持一致 */
+    .table-responsive {
+        max-height: 70vh;
+        border-bottom: 1px solid #e6e7e9;
+    }
+
+    th {
+        white-space: nowrap;
+        background-color: #f8fafc !important;
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        box-shadow: 0 1px 0 #e6e7e9;
+    }
+
+    /* Column Widths */
+    th.w-number {
+        width: 50px;
+        min-width: 50px;
+    }
+
+    th.w-name {
+        min-width: 80px;
+    }
+
+    th.w-gender {
+        width: 50px;
+    }
+
+    th.w-job {
+        min-width: 120px;
+    }
+
+    th.w-level {
+        width: 80px;
+    }
+
+    th.w-edu {
+        width: 80px;
+    }
+
+    th.w-date {
+        width: 90px;
+    }
+
+    th.w-rec {
+        min-width: 140px;
+    }
+
+    /* 推荐状态列宽一些 */
+    th.w-dept {
+        min-width: 120px;
+    }
+
+    th.w-rater {
+        min-width: 100px;
+    }
+
+    .editable-cell select {
+        border: none;
+        background: transparent;
+        width: 100%;
+        padding: 4px;
+        text-align: center;
+        appearance: none;
+        /* Hide arrow in read-only mode mostly */
+        -webkit-appearance: none;
+    }
+
+    .editable-cell select:disabled {
+        color: #1d273b;
+        opacity: 1;
+    }
+
+    .editable-cell select:not([disabled]) {
+        background-color: #fff;
+        box-shadow: inset 0 0 0 1px #dce1e7;
+        appearance: auto;
+        /* Show arrow when editable */
+        -webkit-appearance: auto;
+    }
+
+    .editable-cell select:focus {
+        outline: none;
+        box-shadow: inset 0 0 0 2px #206bc4;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Header & Actions -->
+    <div class="row g-2 align-items-center mb-3">
+        <div class="col">
+            <h2 class="page-title">{{ page_title }}</h2>
+            <div class="text-muted mt-1">共 <span id="total-count">0</span> 条记录</div>
+        </div>
+
+        <!-- Filter and Actions -->
+        <div class="col-auto ms-auto d-print-none d-flex align-items-center gap-2">
+            <!-- Filters -->
+            <input type="text" id="f-name" class="form-control form-control-sm" style="width: 100px;" placeholder="姓名">
+            <input type="text" id="f-dept-name" class="form-control form-control-sm" style="width: 120px;"
+                placeholder="部门名称">
+            <input type="text" id="f-rater-account" class="form-control form-control-sm" style="width: 100px;"
+                placeholder="打分人">
+            <button class="btn btn-white btn-sm" onclick="loadData(1)">
+                <i class="ti ti-search"></i>
+            </button>
+            <div class="vr mx-1"></div>
+
+            <!-- Actions -->
+            <button class="btn btn-primary" onclick="calculateData()">
+                <i class="ti ti-calculator me-2"></i>一键计算
+            </button>
+            <button class="btn btn-ghost-danger" onclick="clearData()">
+                <i class="ti ti-trash me-2"></i>一键清空
+            </button>
+            <div class="vr mx-1"></div>
+
+            <button id="btn-edit" class="btn btn-primary" onclick="toggleEditMode(true)">
+                <i class="ti ti-pencil me-2"></i>编辑
+            </button>
+
+            <div id="action-group" style="display: none;">
+                <button class="btn btn-ghost-danger me-2" onclick="cancelEdit()">取消</button>
+                <button class="btn btn-primary" onclick="saveData()">保存</button>
+            </div>
+
+            <button class="btn btn-white" onclick="exportData()">
+                <i class="ti ti-download me-2"></i>导出Excel
+            </button>
+        </div>
+    </div>
+
+    <!-- Table -->
+    <div class="card">
+        <div class="table-responsive">
+            <table class="table table-vcenter table-bordered card-table table-striped" id="dataTable">
+                <thead>
+                    <tr>
+                        <th class="w-number text-center">序号</th>
+                        <th class="w-name">姓名</th>
+                        <th class="w-gender text-center">性别</th>
+                        <th class="w-job">现职务</th>
+                        <th class="w-level text-center">岗位层级</th>
+                        <th class="w-edu text-center">文化程度</th>
+                        <th class="w-date text-center">出生年月</th>
+                        <th class="w-date text-center">现职级时间</th>
+                        <th class="w-rec text-center" id="col-rec-title">是否推荐为...</th>
+                        <th class="w-dept">部门名称</th>
+                        <th class="w-rater">打分人</th>
+                    </tr>
+                </thead>
+                <tbody id="table-body">
+                    <!-- Loaded via JS -->
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pagination -->
+        <div class="pagination-container d-flex justify-content-between align-items-center p-3 border-top">
+            <div class="d-flex align-items-center gap-2">
+                <span class="text-muted small">每页</span>
+                <select class="form-select form-select-sm" style="width: 70px;" id="limit-select"
+                    onchange="changeLimit()">
+                    <option value="30" selected>30</option>
+                    <option value="50">50</option>
+                    <option value="100">100</option>
+                </select>
+            </div>
+
+            <div class="d-flex align-items-center gap-3">
+                <ul class="pagination m-0" id="pagination"></ul>
+
+                <div class="input-group input-group-sm" style="width: 120px;">
+                    <input type="number" class="form-control" id="page-jump-input" placeholder="页码" min="1">
+                    <button class="btn btn-outline-secondary" type="button" onclick="jumpToPage()">Go</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block script_extra %}
+<script>
+    const API_BASE = '{{ api_base }}'; // e.g. /api/recommendation-details/principal
+    const REC_TITLE = '{{ rec_title }}';   // e.g. 推荐为单位（部门）正职
+    let totalPages = 1;
+
+    document.getElementById('col-rec-title').innerText = REC_TITLE;
+
+    let currentPage = 1;
+
+    document.addEventListener('DOMContentLoaded', () => loadData());
+
+    async function loadData(page = 1) {
+        if (page < 1) page = 1;
+        currentPage = page;
+        const limit = document.getElementById('limit-select').value;
+
+        const qs = new URLSearchParams({
+            page, limit,
+            name: document.getElementById('f-name').value,
+            dept_name: document.getElementById('f-dept-name').value,
+            rater_account: document.getElementById('f-rater-account').value
+        }).toString();
+
+        document.querySelector('.table-responsive').style.opacity = '0.5';
+        try {
+            const res = await (await fetch(`${API_BASE}/list?${qs}`)).json();
+            renderTable(res.data);
+
+            totalPages = Math.ceil(res.count / limit);
+            renderPagination(totalPages, currentPage);
+            document.getElementById('total-count').innerText = res.count;
+            document.getElementById('page-jump-input').max = totalPages;
+
+        } catch (e) {
+            console.error(e);
+            alert('加载失败');
+        } finally {
+            document.querySelector('.table-responsive').style.opacity = '1';
+        }
+    }
+
+    function renderTable(data) {
+        const tbody = document.getElementById('table-body');
+        if (!data || data.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="11" class="text-center py-5 text-muted">暂无数据，请点击“一键计算”生成</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = data.map(item => `
+            <tr data-id="${item.id}">
+                <td class="text-center">${item.sort_no || ''}</td>
+                <td><strong>${item.name || ''}</strong></td>
+                <td class="text-center">${item.gender || ''}</td>
+                <td><div class="text-truncate" style="max-width: 150px;" title="${item.current_position}">${item.current_position || ''}</div></td>
+                <td class="text-center">${item.rank_level || ''}</td>
+                <td class="text-center">${item.education || ''}</td>
+                <td class="text-center">${item.birth_date || ''}</td>
+                <td class="text-center">${item.rank_time || ''}</td>
+                
+                <!-- Editable Column -->
+                <td class="editable-cell text-center">
+                    <select name="is_recommended" disabled>
+                        <option value="" ${item.is_recommended === '' || item.is_recommended == null ? 'selected' : ''}></option>
+                        <option value="推荐" ${item.is_recommended === '推荐' ? 'selected' : ''}>推荐</option>
+                    </select>
+                </td>
+                
+                <td>${item.dept_name || ''}</td>
+                <td><span class="badge bg-azure-lt">${item.rater_account || ''}</span></td>
+            </tr>
+        `).join('');
+    }
+
+    function renderPagination(tm, cm) {
+        // tm = total pages, cm = current model
+        const ul = document.getElementById('pagination');
+        ul.innerHTML = '';
+        if (tm <= 1) return;
+
+        // First
+        ul.innerHTML += `<li class="page-item ${cm == 1 ? 'disabled' : ''}">
+            <a class="page-link" href="#" onclick="loadData(1); return false;" title="第一页">&laquo;</a>
+        </li>`;
+
+        // Prev
+        ul.innerHTML += `<li class="page-item ${cm == 1 ? 'disabled' : ''}">
+            <a class="page-link" href="#" onclick="loadData(${cm - 1}); return false;" title="上一页">&lsaquo;</a>
+        </li>`;
+
+        let start = Math.max(1, cm - 2);
+        let end = Math.min(tm, cm + 2);
+
+        if (start > 1) ul.innerHTML += `<li class="page-item disabled"><a class="page-link">...</a></li>`;
+
+        for (let i = start; i <= end; i++) {
+            ul.innerHTML += `<li class="page-item ${cm == i ? 'active' : ''}">
+                <a class="page-link" href="#" onclick="loadData(${i}); return false;">${i}</a>
+            </li>`;
+        }
+
+        if (end < tm) ul.innerHTML += `<li class="page-item disabled"><a class="page-link">...</a></li>`;
+
+        // Next
+        ul.innerHTML += `<li class="page-item ${cm == tm ? 'disabled' : ''}">
+            <a class="page-link" href="#" onclick="loadData(${cm + 1}); return false;" title="下一页">&rsaquo;</a>
+        </li>`;
+
+        // Last
+        ul.innerHTML += `<li class="page-item ${cm == tm ? 'disabled' : ''}">
+            <a class="page-link" href="#" onclick="loadData(${tm}); return false;" title="最后一页">&raquo;</a>
+        </li>`;
+    }
+
+    function changeLimit() { loadData(1); }
+
+    function jumpToPage() {
+        const val = parseInt(document.getElementById('page-jump-input').value);
+        if (val && val >= 1 && val <= totalPages) {
+            loadData(val);
+        } else {
+            alert(`请输入有效页码 (1-${totalPages})`);
+        }
+    }
+
+    // Allow Enter key in jump input
+    document.getElementById('page-jump-input').addEventListener('keypress', function (e) {
+        if (e.key === 'Enter') jumpToPage();
+    });
+
+    async function calculateData() {
+        if (!confirm('确定重新计算？这将覆盖现有明细数据。')) return;
+        document.body.style.cursor = 'wait';
+        try {
+            const res = await (await fetch(`${API_BASE}/calculate`, { method: 'POST' })).json();
+            alert(res.msg);
+            if (res.success) loadData(1);
+        } catch (e) { alert('计算失败: ' + e); }
+        finally { document.body.style.cursor = 'default'; }
+    }
+
+    async function clearData() {
+        if (!confirm('确定清空所有数据？')) return;
+        try {
+            const res = await (await fetch(`${API_BASE}/clear`, { method: 'POST' })).json();
+            alert(res.msg);
+            loadData(1);
+        } catch (e) { alert('操作失败'); }
+    }
+
+    function toggleEditMode(edit) {
+        document.querySelectorAll('select[name="is_recommended"]').forEach(el => el.disabled = !edit);
+        document.getElementById('btn-edit').style.display = edit ? 'none' : 'inline-block';
+        document.getElementById('action-group').style.display = edit ? 'inline-block' : 'none';
+    }
+
+    function cancelEdit() {
+        toggleEditMode(false);
+        loadData(currentPage); // reload to revert
+    }
+
+    async function saveData() {
+        const updates = [];
+        document.querySelectorAll('#dataTable tbody tr').forEach(tr => {
+            const id = tr.getAttribute('data-id');
+            const val = tr.querySelector('select[name="is_recommended"]').value;
+            // Only send what is needed? Or just check diff? For simplicity send all or just loop.
+            updates.push({ id: id, is_recommended: val });
+        });
+
+        try {
+            const res = await (await fetch(`${API_BASE}/save`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ data: updates })
+            })).json();
+            alert(res.msg);
+            if (res.success) {
+                toggleEditMode(false);
+                loadData(currentPage);
+            }
+        } catch (e) { alert('保存失败'); }
+    }
+
+    function exportData() {
+        window.location.href = `${API_BASE}/export`;
+    }
+</script>
+{% endblock %}

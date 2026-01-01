@@ -833,8 +833,16 @@ def team_score_details_calculate():
         '''
         df = pd.read_sql_query(sql, db)
         
+        # 排除院领导打分记录
+        if not df.empty:
+            df = df[df['dept_code'] != 'A0'].copy()
+            df = df[df['account_type'] != '院领导'].copy()
+        
         if df.empty:
-            return jsonify({'success': False, 'msg': '无评分数据'})
+            return jsonify({'success': False, 'msg': '无有效评分数据'})
+
+        # 分数保留两位小数
+        df['score'] = df['score'].round(2)
 
         # 2. Sorting Logic
         # Account Type Mapping
@@ -1134,9 +1142,19 @@ def examinee_summary_page():
 def examinee_summary_list():
     """获取汇总得分列表"""
     try:
+        page = int(request.args.get('page', 1))
+        limit = int(request.args.get('limit', 30))
+        offset = (page - 1) * limit
+
         db = get_db()
-        data = db.execute('SELECT * FROM examinee_score_summary ORDER BY id ASC').fetchall()
-        return jsonify({'success': True, 'data': [dict(row) for row in data]})
+        count = db.execute('SELECT COUNT(*) FROM examinee_score_summary').fetchone()[0]
+        rows = db.execute('SELECT * FROM examinee_score_summary ORDER BY id ASC LIMIT ? OFFSET ?', (limit, offset)).fetchall()
+        
+        return jsonify({
+            'success': True, 
+            'count': count,
+            'data': [dict(row) for row in rows]
+        })
     except Exception as e:
         return jsonify({'success': False, 'msg': str(e)})
 
@@ -3764,7 +3782,11 @@ def submit_team_score():
         user_row = db.execute('SELECT dept_code FROM evaluation_accounts WHERE username=?', (rater_account,)).fetchone()
 
         if not user_row: return jsonify({'success': False, 'msg': '账号异常'})
-
+        
+        # 院领导不参与领导班子打分
+        if user_row['dept_code'] == 'A0':
+            return jsonify({'success': False, 'msg': '院领导无需打领导班子分'})
+        
         target_dept_code = user_row['dept_code']
 
         
@@ -5339,71 +5361,38 @@ def submit_recommend_principal():
         
 
     # 2. Save (Replace All logic)
-
-    # Since this is a simple "select N from M", we can clear old recommendations for this user and insert new ones.
-
+    # New Logic: Record status for ALL candidates (1 for selected, 0 for others)
     try:
-
         cur = db.cursor()
-
-        
-
-        # Clear old
-
-        cur.execute('DELETE FROM recommendation_scores_principal WHERE rater_account=?', (rater_account,))
-
-        
-
-        # Insert new
-
         dept_code = user_row['dept_code']
 
+        # 1. Fetch ALL candidates for this department
+        all_candidates = db.execute('SELECT id, name FROM recommend_principal WHERE dept_code=?', (dept_code,)).fetchall()
         
+        # 2. Clear old records for this user (Idempotency)
+        cur.execute('DELETE FROM recommendation_scores_principal WHERE rater_account=?', (rater_account,))
+        
+        # 3. Convert selected_ids to set of ints for O(1) lookup
+        selected_set = set()
+        for sid in selected_ids:
+            try:
+                selected_set.add(int(sid))
+            except (ValueError, TypeError):
+                pass
 
-        if selected_ids:
-
-             # Fetch names for redundancy? Or just IDs. User requirement said "associate personnel info". 
-
-             # For storage, name might be useful but ID is critical.
-
-             # Let's fetch names to store them as plan suggested.
-
-             
-
-             placeholders = ','.join(['?'] * len(selected_ids))
-
-             name_map_rows = db.execute(f'SELECT id, name FROM recommend_principal WHERE id IN ({placeholders})', selected_ids).fetchall()
-
-             name_map = {r['id']: r['name'] for r in name_map_rows}
-
-             
-
-             for uid in selected_ids:
-
-                 uid_int = int(uid)
-
-                 u_name = name_map.get(uid_int, '')
-
-                 cur.execute('''
-
-                    INSERT INTO recommendation_scores_principal (rater_account, target_dept_code, examinee_id, examinee_name, is_recommended)
-
-                    VALUES (?, ?, ?, ?, 1)
-
-                 ''', (rater_account, dept_code, uid_int, u_name))
-        else:
-             # Case: Empty recommendation (User chose no one)
-             # We must record this submission so status checks pass and it counts as a valid vote (denominator).
-             # We use a sentinel: examinee_id=0, is_recommended=0
-             cur.execute('''
+        # 4. Insert record for EVERY candidate
+        for cand in all_candidates:
+            cid = cand['id']
+            cname = cand['name']
+            
+            is_rec = 1 if cid in selected_set else 0
+            
+            cur.execute('''
                 INSERT INTO recommendation_scores_principal (rater_account, target_dept_code, examinee_id, examinee_name, is_recommended)
-                VALUES (?, ?, 0, '放弃推荐', 0)
-             ''', (rater_account, dept_code))
-
-        
+                VALUES (?, ?, ?, ?, ?)
+            ''', (rater_account, dept_code, cid, cname, is_rec))
 
         db.commit()
-
         return jsonify({'success': True, 'msg': '提交成功'})
 
         
@@ -5563,59 +5552,37 @@ def submit_recommend_deputy():
         
 
     # 2. Save (Replace All logic)
-
+    # New Logic: Record for ALL candidates
     try:
-
         cur = db.cursor()
-
-        
-
-        # Clear old
-
-        cur.execute('DELETE FROM recommendation_scores_deputy WHERE rater_account=?', (rater_account,))
-
-        
-
-        # Insert new
-
         dept_code = user_row['dept_code']
 
+        # 1. Fetch ALL candidates
+        all_candidates = db.execute('SELECT id, name FROM recommend_deputy WHERE dept_code=?', (dept_code,)).fetchall()
         
-
-        if selected_ids:
-
-             placeholders = ','.join(['?'] * len(selected_ids))
-
-             name_map_rows = db.execute(f'SELECT id, name FROM recommend_deputy WHERE id IN ({placeholders})', selected_ids).fetchall()
-
-             name_map = {r['id']: r['name'] for r in name_map_rows}
-
-             
-
-             for uid in selected_ids:
-
-                 uid_int = int(uid)
-
-                 u_name = name_map.get(uid_int, '')
-
-                 cur.execute('''
-
-                    INSERT INTO recommendation_scores_deputy (rater_account, target_dept_code, examinee_id, examinee_name, is_recommended)
-
-                    VALUES (?, ?, ?, ?, 1)
-
-                 ''', (rater_account, dept_code, uid_int, u_name))
-        else:
-             # Case: Empty recommendation (Record sentinel)
-             cur.execute('''
+        # 2. Clear old
+        cur.execute('DELETE FROM recommendation_scores_deputy WHERE rater_account=?', (rater_account,))
+        
+        # 3. Process selection
+        selected_set = set()
+        for sid in selected_ids:
+            try:
+                selected_set.add(int(sid))
+            except (ValueError, TypeError):
+                pass
+        
+        # 4. Insert
+        for cand in all_candidates:
+            cid = cand['id']
+            cname = cand['name']
+            is_rec = 1 if cid in selected_set else 0
+            
+            cur.execute('''
                 INSERT INTO recommendation_scores_deputy (rater_account, target_dept_code, examinee_id, examinee_name, is_recommended)
-                VALUES (?, ?, 0, '放弃推荐', 0)
-             ''', (rater_account, dept_code))
-
-        
+                VALUES (?, ?, ?, ?, ?)
+            ''', (rater_account, dept_code, cid, cname, is_rec))
 
         db.commit()
-
         return jsonify({'success': True, 'msg': '提交成功'})
 
         
@@ -6909,6 +6876,429 @@ def democratic_summary_data():
         
     return jsonify({'code': 0, 'data': results})
 
+# ==========================================
+# 19. API: 推荐明细查询 (Refactored for Snapshot Tables)
+# ==========================================
+
+# --- 页面路由 ---
+
+@app.route('/admin/stats/recommendation/principal/details')
+@admin_required
+def recommendation_details_principal():
+    return render_template('recommendation_details_advanced.html', 
+                         page_title='后备干部推荐（正职）明细',
+                         api_base='/api/recommendation-details/principal',
+                         rec_title='是否推荐为单位（部门）正职')
+
+@app.route('/admin/stats/recommendation/deputy/details')
+@admin_required
+def recommendation_details_deputy():
+    return render_template('recommendation_details_advanced.html', 
+                         page_title='后备干部推荐（副职）明细',
+                         api_base='/api/recommendation-details/deputy',
+                         rec_title='是否推荐为单位（部门）副职')
+
+# --- 通用处理逻辑 (Factory Pattern) ---
+
+def handle_rec_details_request(rec_type, action):
+    # rec_type: 'principal' or 'deputy'
+    # action: list, calculate, clear, save, export
+    
+    db = get_db()
+    
+    table_name = f'recommendation_details_{rec_type}'
+    source_score_table = f'recommendation_scores_{rec_type}'
+    source_person_table = f'recommend_people_{rec_type}' # WRONG NAME in DB, check DB.
+    # Check initiate_db.py: 
+    # Tables are: recommend_principal / recommend_deputy
+    source_person_table = f'recommend_{rec_type}'
+    
+    if action == 'list':
+        page = int(request.args.get('page', 1))
+        limit = int(request.args.get('limit', 30))
+        offset = (page - 1) * limit
+        
+        # Filters
+        name = request.args.get('name', '')
+        dept_name = request.args.get('dept_name', '')
+        rater = request.args.get('rater_account', '')
+        
+        where = []
+        params = []
+        if name:
+            where.append("name LIKE ?")
+            params.append(f"%{name}%")
+        if dept_name:
+            where.append("dept_name LIKE ?")
+            params.append(f"%{dept_name}%")
+        if rater:
+            where.append("rater_account LIKE ?")
+            params.append(f"%{rater}%")
+            
+        where_clause = "WHERE " + " AND ".join(where) if where else ""
+        
+        count = db.execute(f'SELECT count(*) FROM {table_name} {where_clause}', params).fetchone()[0]
+        rows = db.execute(f'SELECT * FROM {table_name} {where_clause} ORDER BY dept_code ASC, rater_account ASC, sort_no ASC LIMIT ? OFFSET ?', params + [limit, offset]).fetchall()
+        return jsonify({'count': count, 'data': [dict(r) for r in rows]})
+        
+    elif action == 'calculate':
+        try:
+            cur = db.cursor()
+            cur.execute(f'DELETE FROM {table_name}') # Clear Snapshot
+            
+            # Join Logic:
+            # We need to join Score Table (S) with Person Table (P).
+            # S has: rater_account, examinee_id, is_recommended (0/1)
+            # P has: id, name, gender, current_position, rank_level, education, birth_date, rank_time...
+            
+            # We insert into Snapshot Table.
+            # is_recommended in snapshot should be '推荐' if S.is_recommended=1 else '' 
+            
+            sql = f'''
+                INSERT INTO {table_name} (
+                    sort_no, name, gender, current_position, rank_level, education, birth_date, rank_time,
+                    is_recommended,
+                    dept_name, dept_code, rater_account
+                )
+                SELECT 
+                    p.sort_no, p.name, p.gender, p.current_position, p.rank_level, p.education, p.birth_date, p.rank_time,
+                    CASE WHEN s.is_recommended = 1 THEN '推荐' ELSE '' END,
+                    p.dept_name, p.dept_code, s.rater_account
+                FROM {source_score_table} s
+                JOIN {source_person_table} p ON s.examinee_id = p.id
+            '''
+            cur.execute(sql)
+            db.commit()
+            return jsonify({'success': True, 'msg': '计算完成'})
+        except Exception as e:
+            return jsonify({'success': False, 'msg': str(e)})
+
+    elif action == 'clear':
+        db.execute(f'DELETE FROM {table_name}')
+        db.commit()
+        return jsonify({'success': True, 'msg': '已清空'})
+        
+    elif action == 'save':
+        try:
+            data = request.json.get('data', [])
+            cur = db.cursor()
+            for item in data:
+                # item: {id: 123, is_recommended: '推荐' or ''}
+                val = item.get('is_recommended', '')
+                cur.execute(f'UPDATE {table_name} SET is_recommended=? WHERE id=?', (val, item['id']))
+            db.commit()
+            return jsonify({'success': True, 'msg': '保存成功'})
+        except Exception as e:
+            return jsonify({'success': False, 'msg': str(e)})
+            
+    elif action == 'export':
+        import pandas as pd
+        from io import BytesIO
+        
+        rows = db.execute(f'SELECT * FROM {table_name} ORDER BY dept_code ASC, rater_account ASC, sort_no ASC').fetchall()
+        if not rows: return "No Data", 404
+        
+        df = pd.DataFrame([dict(r) for r in rows])
+        
+        # Clean columns
+        cols_map = {
+            'sort_no': '序号',
+            'name': '姓名', 
+            'gender': '性别', 
+            'current_position': '现职务', 
+            'rank_level': '岗位层级', 
+            'education': '文化程度', 
+            'birth_date': '出生年月', 
+            'rank_time': '现职级时间',
+            'is_recommended': '是否推荐', # Title depends on type but simple is fine
+            'dept_name': '部门名称', 
+            'rater_account': '打分人'
+        }
+        
+        # Title specific
+        rec_title = '是否推荐为单位（部门）正职' if rec_type == 'principal' else '是否推荐为单位（部门）副职'
+        cols_map['is_recommended'] = rec_title
+        
+        target_cols = ['sort_no', 'name', 'gender', 'current_position', 'rank_level', 'education', 
+                       'birth_date', 'rank_time', 'is_recommended', 'dept_name', 'rater_account']
+                       
+        df = df[target_cols].rename(columns=cols_map)
+        
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df.to_excel(writer, index=False, sheet_name='Sheet1')
+        output.seek(0)
+        
+        filename = f'后备干部推荐_{"正职" if rec_type=="principal" else "副职"}_明细.xlsx'
+        return send_file(output, as_attachment=True, download_name=filename)
+
+
+# --- 路由绑定 ---
+
+@app.route('/api/recommendation-details/<rec_type>/<action>', methods=['GET', 'POST'])
+@admin_required
+def api_recommendation_details_router(rec_type, action):
+    if rec_type not in ['principal', 'deputy']: return "Invalid Type", 400
+    if action not in ['list', 'calculate', 'clear', 'save', 'export']: return "Invalid Action", 400
+    
+    return handle_rec_details_request(rec_type, action)
+
+
+# ==========================================
+# 20. API: 推荐汇总 (Summary Snapshot)
+# ==========================================
+
+@app.route('/admin/stats/recommendation/principal/summary')
+@admin_required
+def recommendation_summary_principal():
+    return render_template('recommendation_summary.html', 
+                         page_title='后备干部推荐（正职）汇总',
+                         api_base='/api/recommendation-summary/principal')
+
+@app.route('/admin/stats/recommendation/deputy/summary')
+@admin_required
+def recommendation_summary_deputy():
+    return render_template('recommendation_summary.html', 
+                         page_title='后备干部推荐（副职）汇总',
+                         api_base='/api/recommendation-summary/deputy')
+
+# --- Summary Factory Logic ---
+
+def handle_rec_summary_request(rec_type, action):
+    db = get_db()
+    table_name = f'recommendation_summary_{rec_type}'
+    score_table = f'recommendation_scores_{rec_type}'
+    person_table = f'recommend_{rec_type}'
+    
+    if action == 'list':
+        page = int(request.args.get('page', 1))
+        limit = int(request.args.get('limit', 30))
+        offset = (page - 1) * limit
+        
+        dept_name = request.args.get('dept_name', '')
+        name = request.args.get('name', '')
+        
+        where = []
+        params = []
+        if dept_name:
+            where.append("dept_name LIKE ?")
+            params.append(f"%{dept_name}%")
+        if name:
+            where.append("name LIKE ?")
+            params.append(f"%{name}%")
+            
+        where_clause = "WHERE " + " AND ".join(where) if where else ""
+        
+        # Order by Department -> Group (A/B/C/D/Total) -> Candidate (SortNo)
+        # As requested: "先将评委分组为正职的显示完，再显示评委分组为副职的"
+        orderby = "ORDER BY dept_code ASC, group_sort ASC, sort_no ASC"
+        
+        count = db.execute(f'SELECT count(*) FROM {table_name} {where_clause}', params).fetchone()[0]
+        rows = db.execute(f'SELECT * FROM {table_name} {where_clause} {orderby} LIMIT ? OFFSET ?', params + [limit, offset]).fetchall()
+        return jsonify({'count': count, 'data': [dict(r) for r in rows]})
+        
+    elif action == 'calculate':
+        try:
+            # 1. Clear old data
+            db.execute(f'DELETE FROM {table_name}')
+            
+            # 2. Define Groups
+            group_map = {
+                '正职': ('A(正职)', 1),
+                '副职': ('B(副职)', 2),
+                '中心基层领导': ('C(中心基层领导)', 3),
+                '其他': ('D(员工)', 4),
+                '员工': ('D(员工)', 4),
+                '其他员工': ('D(员工)', 4), # Logic fix: database uses '其他员工'
+                '院领导': ('L(院领导)', 5)
+            }
+            
+            # 3. Get all candidates grouped by department
+            candidates = db.execute(f'SELECT * FROM {person_table} ORDER BY dept_code ASC, sort_no ASC').fetchall()
+            if not candidates:
+                return jsonify({'success': True, 'msg': '无候选人数据'})
+                
+            # Iterate distinct departments
+            dept_codes = sorted(list(set([c['dept_code'] for c in candidates])))
+            
+            # Map Dept Code -> proper Dept Name (from department_config)
+            # This is crucial for U, V, W, X, Y subsidiaries to show the Company Name, not "Marketing Dept"
+            dept_config_rows = db.execute("SELECT dept_code, dept_name FROM department_config").fetchall()
+            dept_name_map = {r['dept_code']: r['dept_name'] for r in dept_config_rows}
+            special_subsidiary_codes = ['U', 'V', 'W', 'X', 'Y']
+
+            cur = db.cursor()
+            
+            for dcode in dept_codes:
+                # Filter candidates for this dept
+                dept_candidates = [c for c in candidates if c['dept_code'] == dcode]
+                if not dept_candidates: continue # Should not happen based on dept_codes extraction
+                
+                # Determine Display Dept Name
+                # Default to first candidate's dept_name, BUT override if it's a special subsidiary
+                display_dept_name = dept_candidates[0]['dept_name'] 
+                if dcode in special_subsidiary_codes and dcode in dept_name_map:
+                    display_dept_name = dept_name_map[dcode]
+                
+                # Get all VALID voters in this department for denominator calculation
+                voters_query = f'''
+                    SELECT DISTINCT s.rater_account, a.account_type
+                    FROM {score_table} s
+                    LEFT JOIN evaluation_accounts a ON s.rater_account = a.username
+                    WHERE s.target_dept_code = ?
+                '''
+                voters = db.execute(voters_query, (dcode,)).fetchall()
+                
+                # Count valid votes per type
+                type_vote_counts = {}
+                for v in voters:
+                    atype = v['account_type']
+                    type_vote_counts[atype] = type_vote_counts.get(atype, 0) + 1
+                    
+                total_valid_votes = len(voters)
+                
+                # Identify Active Groups and Aggregate Voter Counts by Group Name
+                # group_voter_counts: { group_name: (gsort, count) }
+                group_voter_counts = {}
+                for v in voters:
+                    atype = v['account_type']
+                    if atype in group_map:
+                        gname, gsort = group_map[atype]
+                        if gname not in group_voter_counts:
+                            group_voter_counts[gname] = {'sort': gsort, 'count': 0}
+                        group_voter_counts[gname]['count'] += 1
+                
+                # Active groups are those having at least 1 voter in this department
+                active_group_names = sorted(group_voter_counts.keys(), key=lambda n: group_voter_counts[n]['sort'])
+                
+                # Prepare Aggregation for each candidate
+                for cand in dept_candidates:
+                    cid = cand['id']
+                    cname = cand['name']
+                    
+                    # Get recommendation counts for this candidate per type
+                    rec_query = f'''
+                        SELECT a.account_type, COUNT(*) as cnt
+                        FROM {score_table} s
+                        LEFT JOIN evaluation_accounts a ON s.rater_account = a.username
+                        WHERE s.target_dept_code = ? AND s.examinee_id = ? AND s.is_recommended = 1
+                        GROUP BY a.account_type
+                    '''
+                    rec_counts_rows = db.execute(rec_query, (dcode, cid)).fetchall()
+                    
+                    # Aggregate Recommendation Counts by Group Name
+                    group_rec_counts = {gn: 0 for gn in active_group_names}
+                    for r in rec_counts_rows:
+                        atype = r['account_type']
+                        if atype in group_map:
+                            gname, _ = group_map[atype]
+                            if gname in group_rec_counts:
+                                group_rec_counts[gname] += r['cnt']
+                    
+                    # -- Insert Group Rows --
+                    for gname in active_group_names:
+                        gsort = group_voter_counts[gname]['sort']
+                        denom = group_voter_counts[gname]['count']
+                        num = group_rec_counts[gname]
+                        
+                        # Calculate Rate
+                        rate_str = f"{(num / denom * 100):.3f}%"
+                            
+                        # Insert
+                        cur.execute(f'''
+                            INSERT INTO {table_name} 
+                            (sort_no, group_name, group_sort, valid_votes, rec_count, rec_rate,
+                             name, gender, current_position, rank_level, education, birth_date, rank_time,
+                             dept_name, dept_code)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        ''', (
+                            cand['sort_no'], gname, gsort, denom, num, rate_str,
+                            cname, cand['gender'], cand['current_position'], cand['rank_level'], cand['education'], cand['birth_date'], cand['rank_time'],
+                            display_dept_name, cand['dept_code']
+                        ))
+                    
+                    # -- Insert Subtotal Row (Total) --
+                    total_num = sum(group_rec_counts.values())
+                    total_rate_str = "0.000%"
+                    if total_valid_votes > 0:
+                        total_rate_str = f"{(total_num / total_valid_votes * 100):.3f}%"
+                        
+                    cur.execute(f'''
+                        INSERT INTO {table_name} 
+                        (sort_no, group_name, group_sort, valid_votes, rec_count, rec_rate,
+                            name, gender, current_position, rank_level, education, birth_date, rank_time,
+                            dept_name, dept_code)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ''', (
+                        cand['sort_no'], '合计', 99, total_valid_votes, total_num, total_rate_str,
+                        cname, cand['gender'], cand['current_position'], cand['rank_level'], cand['education'], cand['birth_date'], cand['rank_time'],
+                        display_dept_name, cand['dept_code']
+                    ))
+            
+            db.commit()
+            return jsonify({'success': True, 'msg': '汇总计算完成'})
+            
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            return jsonify({'success': False, 'msg': str(e)})
+
+    elif action == 'clear':
+        db.execute(f'DELETE FROM {table_name}')
+        db.commit()
+        return jsonify({'success': True, 'msg': '已清空'})
+        
+    elif action == 'export':
+        import pandas as pd
+        from io import BytesIO
+        
+        # Consistent ordering for export
+        rows = db.execute(f'SELECT * FROM {table_name} ORDER BY dept_code ASC, group_sort ASC, sort_no ASC').fetchall()
+        if not rows: return "No Data", 404
+        
+        df = pd.DataFrame([dict(r) for r in rows])
+        
+        if 'id' in df.columns: del df['id']
+        
+        # Rename Cols for Excel
+        rename_map = {
+            'sort_no': '序号', # Or Candidate Sort
+            'group_name': '评委分组',
+            'valid_votes': '有效票数',
+            'name': '姓名',
+            'dept_name': '部门',
+            'gender': '性别',
+            'current_position': '职务',
+            'rank_level': '职务级别',
+            'birth_date': '出生年月',
+            'education': '文化程度',
+            'rank_time': '职级时间',
+            'rec_count': '推荐',
+            'rec_rate': '推荐率'
+        }
+        
+        col_order = ['sort_no', 'group_name', 'valid_votes', 'name', 'dept_name', 'gender', 'current_position', 'rank_level', 'birth_date', 'education', 'rank_time', 'rec_count', 'rec_rate']
+        
+        # Filter existing cols
+        final_cols = [c for c in col_order if c in df.columns]
+        df = df[final_cols].rename(columns=rename_map)
+        
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df.to_excel(writer, index=False, sheet_name='Summary')
+        output.seek(0)
+        
+        filename = f'后备干部推荐_{"正职" if rec_type=="principal" else "副职"}_汇总.xlsx'
+        return send_file(output, as_attachment=True, download_name=filename)
+        
+    return "Unknown Action", 400
+
+@app.route('/api/recommendation-summary/<rec_type>/<action>', methods=['GET', 'POST'])
+@admin_required
+def api_recommendation_summary_router(rec_type, action):
+    if rec_type not in ['principal', 'deputy']: return "Invalid Type", 400
+    return handle_rec_summary_request(rec_type, action)
+
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    app.run(host='0.0.0.0', port=5000, debug=True)
 

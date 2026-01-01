@@ -1,16 +1,15 @@
 
 import sqlite3
+conn = sqlite3.connect('evaluation.db')
+conn.row_factory = sqlite3.Row
+db = conn
 
-def check_types():
-    db = sqlite3.connect('evaluation.db')
-    db.row_factory = sqlite3.Row
-    
-    print("--- Checking Column Types for Dept K ---")
-    row = db.execute("SELECT dept_code, typeof(count_recommend_principal) as type, count_recommend_principal FROM department_config WHERE dept_code='K'").fetchone()
-    if row:
-        print(f"Dept K: Val={row['count_recommend_principal']}, Type={row['type']}")
-    else:
-        print("Dept K not found")
+print("--- Accounts starting with DE ---")
+rows = db.execute("SELECT username, account_type FROM evaluation_accounts WHERE username LIKE 'DE%' LIMIT 10").fetchall()
+for r in rows:
+    print(f"{r['username']}: {r['account_type']}")
 
-if __name__ == '__main__':
-    check_types()
+print("\n--- Summary of account types ---")
+rows = db.execute("SELECT account_type, COUNT(*) FROM evaluation_accounts GROUP BY account_type").fetchall()
+for r in rows:
+    print(f"{r[0]}: {r[1]}")

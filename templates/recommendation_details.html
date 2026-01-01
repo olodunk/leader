@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-xl">
+    <div class="page-header d-print-none">
+        <div class="row align-items-center">
+            <div class="col">
+                <h2 class="page-title">{{ page_title }}</h2>
+            </div>
+            <div class="col-auto ms-auto d-print-none">
+                <a href="{{ export_url }}" class="btn btn-primary d-none d-sm-inline-block">
+                    <i class="ti ti-download"></i> 导出 Excel
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="table-responsive">
+            <table class="table table-vcenter table-mobile-md card-table" id="data-table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>推荐人账号</th>
+                        <th>被推荐人姓名</th>
+                        <th>被推荐人 ID</th>
+                        <th>所属部门</th>
+                        <th>部门代码</th>
+                        <th>状态</th>
+                        <th>推荐时间</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- Data loaded via JS -->
+                    <tr>
+                        <td colspan="8" class="text-center py-4">正在加载数据...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block script_extra %}
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        fetch('{{ api_url }}')
+            .then(response => response.json())
+            .then(data => {
+                const tbody = document.querySelector('#data-table tbody');
+                tbody.innerHTML = '';
+
+                if (data.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="8" class="text-center py-4 text-muted">暂无数据</td></tr>';
+                    return;
+                }
+
+                data.forEach(row => {
+                    const tr = document.createElement('tr');
+
+                    // 处理“放弃推荐”的显示逻辑
+                    let nameDisplay = row.examinee_name;
+                    let statusBadge = '<span class="badge bg-green text-green-fg">已推荐</span>';
+
+                    if (row.examinee_id === 0 || row.is_recommended === 0) {
+                        nameDisplay = '<span class="text-muted fst-italic">放弃推荐</span>';
+                        statusBadge = '<span class="badge bg-secondary text-secondary-fg">放弃</span>';
+                    }
+
+                    tr.innerHTML = `
+                    <td>${row.id}</td>
+                    <td><span class="text-secondary">${row.rater_account}</span></td>
+                    <td class="fw-bold">${nameDisplay}</td>
+                    <td>${row.examinee_id}</td>
+                    <td>${row.dept_name || '-'}</td>
+                    <td>${row.target_dept_code || '-'}</td>
+                    <td>${statusBadge}</td>
+                    <td class="text-muted">${row.created_at}</td>
+                `;
+                    tbody.appendChild(tr);
+                });
+            })
+            .catch(err => {
+                console.error('Error:', err);
+                document.querySelector('#data-table tbody').innerHTML =
+                    '<tr><td colspan="8" class="text-center py-4 text-danger">数据加载失败</td></tr>';
+            });
+    });
+</script>
+{% endblock %}

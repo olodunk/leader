@@ -407,8 +407,116 @@ def upgrade_schema(cursor):
         )
     ''')
 
+    # --------------------------------------------------------
+    # 表 13b: 正职推荐明细快照表 (recommendation_details_principal)
+    # --------------------------------------------------------
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS recommendation_details_principal (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            sort_no INTEGER,            -- 序号
+            name TEXT,                  -- 姓名
+            gender TEXT,                -- 性别
+            current_position TEXT,      -- 现职务
+            rank_level TEXT,            -- 岗位层级
+            education TEXT,             -- 文化程度
+            birth_date TEXT,            -- 出生年月
+            rank_time TEXT,             -- 现职级时间
+            
+            is_recommended TEXT,        -- 是否推荐 (存储 "推荐" 或 "")
+            
+            dept_name TEXT,             -- 部门名称
+            dept_code TEXT,             -- 部门代码
+            rater_account TEXT,         -- 打分人
+            
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    
+    # --------------------------------------------------------
+    # 表 13c: 副职推荐明细快照表 (recommendation_details_deputy)
+    # --------------------------------------------------------
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS recommendation_details_deputy (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            sort_no INTEGER,            -- 序号
+            name TEXT,                  -- 姓名
+            gender TEXT,                -- 性别
+            current_position TEXT,      -- 现职务
+            rank_level TEXT,            -- 岗位层级
+            education TEXT,             -- 文化程度
+            birth_date TEXT,            -- 出生年月
+            rank_time TEXT,             -- 现职级时间
+            
+            is_recommended TEXT,        -- 是否推荐
+            
+            dept_name TEXT,             -- 部门名称
+            dept_code TEXT,             -- 部门代码
+            rater_account TEXT,         -- 打分人
+            
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
 
-    # 2. middle_managers 表新增列
+
+    # --------------------------------------------------------
+    # 表 13d: 正职推荐汇总快照表 (recommendation_summary_principal)
+    # --------------------------------------------------------
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS recommendation_summary_principal (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            sort_no INTEGER,            -- 序号 (candidate sort)
+            
+            group_name TEXT,            -- 评委分组 (A(正职), B(副职), ..., 合计)
+            group_sort INTEGER,         -- 分组排序 (1, 2, ..., 99)
+            valid_votes INTEGER,        -- 有效票数
+            
+            rec_count INTEGER,          -- 推荐得票数
+            rec_rate TEXT,              -- 推荐率 (e.g. "50.00%")
+            
+            name TEXT,                  -- 姓名
+            gender TEXT,                -- 性别
+            current_position TEXT,      -- 现职务
+            rank_level TEXT,            -- 岗位层级
+            education TEXT,             -- 文化程度
+            birth_date TEXT,            -- 出生年月
+            rank_time TEXT,             -- 现职级时间
+            
+            dept_name TEXT,             -- 部门名称
+            dept_code TEXT,             -- 部门代码
+            
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+
+    # --------------------------------------------------------
+    # 表 13e: 副职推荐汇总快照表 (recommendation_summary_deputy)
+    # --------------------------------------------------------
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS recommendation_summary_deputy (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            sort_no INTEGER,
+            
+            group_name TEXT,
+            group_sort INTEGER,
+            valid_votes INTEGER,
+            
+            rec_count INTEGER,
+            rec_rate TEXT,
+            
+            name TEXT,
+            gender TEXT,
+            current_position TEXT,
+            rank_level TEXT,
+            education TEXT,
+            birth_date TEXT,
+            rank_time TEXT,
+            
+            dept_name TEXT,
+            dept_code TEXT,
+            
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
     mgr_cols = [
         "dept_code TEXT",
         "tenure_time TEXT",

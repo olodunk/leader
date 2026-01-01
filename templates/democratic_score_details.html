@@ -132,7 +132,7 @@
             </table>
         </div>
 
-        <!-- Pagination -->
+        <!-- Enhanced Pagination -->
         <div class="pagination-container d-flex justify-content-between align-items-center p-3 border-top">
             <div class="d-flex align-items-center gap-2">
                 <span class="text-muted small">每页</span>
@@ -143,7 +143,15 @@
                     <option value="100">100</option>
                 </select>
             </div>
-            <ul class="pagination m-0" id="pagination"></ul>
+
+            <div class="d-flex align-items-center gap-3">
+                <ul class="pagination m-0" id="pagination"></ul>
+
+                <div class="input-group input-group-sm" style="width: 120px;">
+                    <input type="number" class="form-control" id="page-jump-input" placeholder="页码" min="1">
+                    <button class="btn btn-outline-secondary" type="button" onclick="jumpToPage()">Go</button>
+                </div>
+            </div>
         </div>
     </div>
 </div>
@@ -153,10 +161,12 @@
 <script>
     let currentPage = 1;
     let currentLimit = 30;
+    let totalPages = 1;
 
     document.addEventListener('DOMContentLoaded', () => loadData());
 
     async function loadData(page = 1) {
+        if (page < 1) page = 1;
         currentPage = page;
         const limit = document.getElementById('limit-select').value;
         const name = document.getElementById('f-name').value;
@@ -176,8 +186,12 @@
         try {
             const res = await (await fetch(`/api/democratic-score-details/list?${qs}`)).json();
             renderTable(res.data);
-            renderPagination(res.count, limit, page);
+
+            totalPages = Math.ceil(res.count / limit);
+            renderPagination(totalPages, currentPage);
             document.getElementById('total-count').innerText = res.count;
+            document.getElementById('page-jump-input').max = totalPages;
+
         } catch (e) {
             console.error(e);
             alert('加载失败');
@@ -206,40 +220,63 @@
         `).join('');
     }
 
-    function renderPagination(total, limit, current) {
-        const pages = Math.ceil(total / limit);
+    function renderPagination(tm, cm) {
+        // tm = total pages, cm = current model
         const ul = document.getElementById('pagination');
         ul.innerHTML = '';
-        if (pages <= 1) return;
+        if (tm <= 1) return;
 
-        // Prev
-        ul.innerHTML += `<li class="page-item ${current == 1 ? 'disabled' : ''}">
-            <a class="page-link" href="#" onclick="loadData(${current - 1}); return false;">上一页</a>
+        // First
+        ul.innerHTML += `<li class="page-item ${cm == 1 ? 'disabled' : ''}">
+            <a class="page-link" href="#" onclick="loadData(1); return false;" title="第一页">&laquo;</a>
         </li>`;
 
-        // Page Numbers
-        let start = Math.max(1, current - 2);
-        let end = Math.min(pages, current + 2);
+        // Prev
+        ul.innerHTML += `<li class="page-item ${cm == 1 ? 'disabled' : ''}">
+            <a class="page-link" href="#" onclick="loadData(${cm - 1}); return false;" title="上一页">&lsaquo;</a>
+        </li>`;
+
+        let start = Math.max(1, cm - 2);
+        let end = Math.min(tm, cm + 2);
 
         if (start > 1) ul.innerHTML += `<li class="page-item disabled"><a class="page-link">...</a></li>`;
 
         for (let i = start; i <= end; i++) {
-            ul.innerHTML += `<li class="page-item ${current == i ? 'active' : ''}">
+            ul.innerHTML += `<li class="page-item ${cm == i ? 'active' : ''}">
                 <a class="page-link" href="#" onclick="loadData(${i}); return false;">${i}</a>
             </li>`;
         }
 
-        if (end < pages) ul.innerHTML += `<li class="page-item disabled"><a class="page-link">...</a></li>`;
+        if (end < tm) ul.innerHTML += `<li class="page-item disabled"><a class="page-link">...</a></li>`;
 
         // Next
-        ul.innerHTML += `<li class="page-item ${current == pages ? 'disabled' : ''}">
-            <a class="page-link" href="#" onclick="loadData(${current + 1}); return false;">下一页</a>
+        ul.innerHTML += `<li class="page-item ${cm == tm ? 'disabled' : ''}">
+            <a class="page-link" href="#" onclick="loadData(${cm + 1}); return false;" title="下一页">&rsaquo;</a>
+        </li>`;
+
+        // Last
+        ul.innerHTML += `<li class="page-item ${cm == tm ? 'disabled' : ''}">
+            <a class="page-link" href="#" onclick="loadData(${tm}); return false;" title="最后一页">&raquo;</a>
         </li>`;
     }
 
     function changeLimit() {
         loadData(1);
     }
+
+    function jumpToPage() {
+        const val = parseInt(document.getElementById('page-jump-input').value);
+        if (val && val >= 1 && val <= totalPages) {
+            loadData(val);
+        } else {
+            alert(`请输入有效页码 (1-${totalPages})`);
+        }
+    }
+
+    // Allow Enter key in jump input
+    document.getElementById('page-jump-input').addEventListener('keypress', function (e) {
+        if (e.key === 'Enter') jumpToPage();
+    });
 
     async function calculateScores() {
         if (!confirm('确定重新从所有子功能（民主测评、干部综合评价）聚合计算分数吗？这将覆盖当前的明细数据，且不可撤销。')) return;
