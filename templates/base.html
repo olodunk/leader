@@ -149,7 +149,7 @@
 
             {% set stats_active = request.endpoint in ['team_score_details', 'democratic_score_details',
             'examinee_summary_page', 'recommendation_details_principal', 'recommendation_details_deputy',
-            'recommendation_summary_principal', 'recommendation_summary_deputy'] %}
+            'recommendation_summary_principal', 'recommendation_summary_deputy', 'team_score_summary_page'] %}
             <li class="nav-item dropdown">
               <a class="nav-link dropdown-toggle {% if stats_active %}show{% endif %}" href="#navbar-stats"
                 data-bs-toggle="dropdown" data-bs-auto-close="false" role="button"
@@ -160,7 +160,8 @@
               <div class="dropdown-menu {% if stats_active %}show{% endif %}">
                 <div class="dropdown-menu-columns">
                   <div class="dropdown-menu-column">
-                    <a class="dropdown-item" href="#">领导班子汇总得分</a>
+                    <a class="dropdown-item {% if request.endpoint == 'team_score_summary_page' %}active{% endif %}"
+                      href="{{ url_for('team_score_summary_page') }}">领导班子汇总得分</a>
                     <a class="dropdown-item {% if request.endpoint == 'team_score_details' %}active{% endif %}"
                       href="{{ url_for('team_score_details') }}">领导班子打分明细</a>
                     <a class="dropdown-item {% if request.endpoint == 'examinee_summary_page' %}active{% endif %}"

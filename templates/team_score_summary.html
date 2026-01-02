@@ -1,0 +1,259 @@
+{% extends "base.html" %}
+
+{% block head_extra %}
+<style>
+    .table-responsive {
+        max-height: 70vh;
+        border-bottom: 1px solid #e6e7e9;
+    }
+
+    th {
+        white-space: nowrap;
+        background-color: #f8fafc !important;
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        box-shadow: 0 1px 0 #e6e7e9;
+    }
+
+    th.w-number {
+        width: 50px;
+        min-width: 50px;
+    }
+
+    th.w-dept {
+        min-width: 150px;
+    }
+
+    th.w-score {
+        min-width: 100px;
+        text-align: center;
+    }
+
+    th.w-total {
+        min-width: 80px;
+        text-align: center;
+        font-weight: bold;
+    }
+
+    td {
+        text-align: center;
+    }
+
+    td:nth-child(2) {
+        text-align: left;
+    }
+
+    /* Dept Name */
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Header & Actions -->
+    <div class="row g-2 align-items-center mb-3">
+        <div class="col">
+            <h2 class="page-title">领导班子汇总得分</h2>
+            <div class="text-muted mt-1">共 <span id="total-count">0</span> 条记录</div>
+        </div>
+
+        <!-- Actions -->
+        <div class="col-auto ms-auto d-print-none d-flex align-items-center gap-2">
+            <button class="btn btn-primary" onclick="calculateData()">
+                <i class="ti ti-calculator me-2"></i>一键计算
+            </button>
+            <button class="btn btn-ghost-danger" onclick="clearData()">
+                <i class="ti ti-trash me-2"></i>一键清空
+            </button>
+            <div class="vr mx-1"></div>
+            <button class="btn btn-white" onclick="exportData()">
+                <i class="ti ti-download me-2"></i>导出Excel
+            </button>
+        </div>
+    </div>
+
+    <!-- Table -->
+    <div class="card">
+        <div class="table-responsive">
+            <table class="table table-vcenter table-bordered card-table table-striped" id="dataTable">
+                <thead>
+                    <tr>
+                        <th class="w-number text-center">序号</th>
+                        <th class="w-dept">部门名称</th>
+                        <th class="w-score">院领导评分</th>
+                        <th class="w-score">职能部门正职评分</th>
+                        <th class="w-score">职能部门ABC票加权评分</th>
+                        <th class="w-score">研究所正职评分</th>
+                        <th class="w-score">研究所ABC票加权评分</th>
+                        <th class="w-score">中心及昆冈正职评分</th>
+                        <th class="w-score">中心及昆冈副职评分</th>
+                        <th class="w-score">中心及昆冈（含分公司）加权</th>
+                        <th class="w-score">基层领导评分（两中心及昆冈）</th>
+                        <th class="w-score">中心及昆冈其他员工评分</th>
+                        <th class="w-score">昆冈分公司正职评分</th>
+                        <th class="w-score">昆冈分公司副职评分</th>
+                        <th class="w-score">昆冈分公司加权</th>
+                        <th class="w-total">总分</th>
+                    </tr>
+                </thead>
+                <tbody id="table-body">
+                    <!-- Loaded via JS -->
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pagination -->
+        <div class="card-footer d-flex justify-content-between align-items-center bg-white border-top">
+            <div class="d-flex align-items-center gap-2">
+                <span class="text-muted small">每页</span>
+                <select class="form-select form-select-sm" style="width: 70px;" id="limit-select"
+                    onchange="loadData(1)">
+                    <option value="30" selected>30</option>
+                    <option value="50">50</option>
+                    <option value="100">100</option>
+                </select>
+            </div>
+
+            <div class="d-flex align-items-center gap-3">
+                <ul class="pagination m-0" id="pagination"></ul>
+                <div class="input-group input-group-sm" style="width: 120px;">
+                    <input type="number" class="form-control" id="page-jump-input" placeholder="页码" min="1">
+                    <button class="btn btn-outline-secondary" type="button" onclick="jumpToPage()">Go</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block script_extra %}
+<script>
+    let currentPage = 1;
+    let totalPages = 1;
+
+    document.addEventListener('DOMContentLoaded', () => loadData(1));
+
+    async function loadData(page = 1) {
+        if (page < 1) page = 1;
+        currentPage = page;
+        const limit = document.getElementById('limit-select').value;
+        const qs = new URLSearchParams({ page, limit }).toString();
+
+        try {
+            const res = await (await fetch(`/api/team-score-summary/list?${qs}`)).json();
+            if (res.success) {
+                renderTable(res.data);
+                totalPages = Math.ceil(res.count / limit);
+                document.getElementById('total-count').innerText = res.count;
+                document.getElementById('page-jump-input').max = totalPages;
+                renderPagination(totalPages, currentPage);
+            } else {
+                alert(res.msg || '加载失败');
+            }
+        } catch (e) {
+            console.error(e);
+            alert('加载失败');
+        }
+    }
+
+    function renderTable(data) {
+        const tbody = document.getElementById('table-body');
+        if (!data || data.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="16" class="text-center py-5 text-muted">暂无数据，请点击“一键计算”生成</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = data.map((item, index) => `
+            <tr>
+                <td class="text-center">${(currentPage - 1) * document.getElementById('limit-select').value + index + 1}</td>
+                <td>${item.dept_name || ''}</td>
+                <td>${fmt(item.score_college_leader)}</td>
+                <td>${fmt(item.score_func_principal)}</td>
+                <td>${fmt(item.score_func_abc_weighted)}</td>
+                <td>${fmt(item.score_inst_principal)}</td>
+                <td>${fmt(item.score_inst_abc_weighted)}</td>
+                <td>${fmt(item.score_center_principal)}</td>
+                <td>${fmt(item.score_center_deputy)}</td>
+                <td>${fmt(item.score_center_kungang)}</td>
+                <td>${fmt(item.score_center_grassroot)}</td>
+                <td>${fmt(item.score_center_employee)}</td>
+                <td>${fmt(item.score_branch_principal)}</td>
+                <td>${fmt(item.score_branch_deputy)}</td>
+                <td>${fmt(item.score_branch_weighted)}</td>
+                <td class="fw-bold">${fmt(item.total_score)}</td>
+            </tr>
+        `).join('');
+    }
+
+    function fmt(val) {
+        return (val !== null && val !== undefined && val !== '') ? Number(val).toFixed(2) : '-';
+    }
+
+    function renderPagination(tm, cm) {
+        const ul = document.getElementById('pagination');
+        ul.innerHTML = '';
+        if (tm <= 1) return;
+
+        ul.innerHTML += `<li class="page-item ${cm == 1 ? 'disabled' : ''}">
+            <a class="page-link" href="#" onclick="loadData(1); return false;">&laquo;</a>
+        </li>`;
+        ul.innerHTML += `<li class="page-item ${cm == 1 ? 'disabled' : ''}">
+            <a class="page-link" href="#" onclick="loadData(${cm - 1}); return false;">&lsaquo;</a>
+        </li>`;
+
+        let start = Math.max(1, cm - 2);
+        let end = Math.min(tm, cm + 2);
+
+        if (start > 1) ul.innerHTML += `<li class="page-item disabled"><a class="page-link">...</a></li>`;
+        for (let i = start; i <= end; i++) {
+            ul.innerHTML += `<li class="page-item ${cm == i ? 'active' : ''}">
+                <a class="page-link" href="#" onclick="loadData(${i}); return false;">${i}</a>
+            </li>`;
+        }
+        if (end < tm) ul.innerHTML += `<li class="page-item disabled"><a class="page-link">...</a></li>`;
+
+        ul.innerHTML += `<li class="page-item ${cm == tm ? 'disabled' : ''}">
+            <a class="page-link" href="#" onclick="loadData(${cm + 1}); return false;">&rsaquo;</a>
+        </li>`;
+        ul.innerHTML += `<li class="page-item ${cm == tm ? 'disabled' : ''}">
+            <a class="page-link" href="#" onclick="loadData(${tm}); return false;">&raquo;</a>
+        </li>`;
+    }
+
+    function jumpToPage() {
+        const val = parseInt(document.getElementById('page-jump-input').value);
+        if (val && val >= 1 && val <= totalPages) {
+            loadData(val);
+        } else {
+            alert(`请输入有效页码 (1-${totalPages})`);
+        }
+    }
+
+    async function calculateData() {
+        if (!confirm('确定重新计算？这将覆盖现有数据。')) return;
+        document.body.style.cursor = 'wait';
+        try {
+            const res = await (await fetch('/api/team-score-summary/calculate', { method: 'POST' })).json();
+            alert(res.msg);
+            if (res.success) loadData(1);
+        } catch (e) {
+            alert('计算失败: ' + e);
+        } finally {
+            document.body.style.cursor = 'default';
+        }
+    }
+
+    async function clearData() {
+        if (!confirm('确定清空所有数据？')) return;
+        try {
+            const res = await (await fetch('/api/team-score-summary/clear', { method: 'POST' })).json();
+            alert(res.msg);
+            loadData(1);
+        } catch (e) { alert('操作失败'); }
+    }
+
+    function exportData() {
+        window.location.href = '/api/team-score-summary/export';
+    }
+</script>
+{% endblock %}
