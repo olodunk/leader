@@ -1,0 +1,292 @@
+{% extends "base.html" %}
+
+{% block head_extra %}
+<style>
+    .nav-tabs .nav-link {
+        font-weight: 500;
+    }
+
+    .nav-tabs .nav-link.active {
+        background-color: #206bc4;
+        color: white;
+        border-color: #206bc4;
+    }
+
+    .stats-table th {
+        background-color: #f8f9fa;
+        text-align: center;
+    }
+
+    .stats-table td {
+        text-align: center;
+    }
+
+    .stats-table td:first-child {
+        text-align: left;
+    }
+
+    .total-row {
+        font-weight: bold;
+        background-color: #e9ecef;
+    }
+
+    .suggestion-item {
+        padding: 0.75rem;
+        border-bottom: 1px solid #e9ecef;
+    }
+
+    .suggestion-item:last-child {
+        border-bottom: none;
+    }
+
+    .suggestion-dept {
+        color: #206bc4;
+        font-weight: 500;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Page Header -->
+    <div class="row g-2 align-items-center mb-3">
+        <div class="col">
+            <h2 class="page-title">干部选拔任用民主评议表统计</h2>
+            <div class="text-muted mt-1">分部门、分问题统计评议结果</div>
+        </div>
+        <div class="col-auto ms-auto d-print-none d-flex align-items-center gap-2">
+            <button class="btn btn-primary" onclick="calculate()">
+                <i class="ti ti-calculator me-2"></i>一键计算
+            </button>
+            <button class="btn btn-ghost-danger" onclick="clearData()">
+                <i class="ti ti-trash me-2"></i>一键清空
+            </button>
+            <div class="vr mx-1"></div>
+            <button class="btn btn-white" onclick="exportData()">
+                <i class="ti ti-download me-2"></i>导出Excel
+            </button>
+        </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="card">
+        <div class="card-header">
+            <ul class="nav nav-tabs card-header-tabs" role="tablist">
+                <li class="nav-item">
+                    <a class="nav-link active" data-bs-toggle="tab" href="#tab-q123" data-question="q1">Q1 总体评价</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" data-bs-toggle="tab" href="#tab-q123" data-question="q2">Q2 监督评价</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" data-bs-toggle="tab" href="#tab-q123" data-question="q3">Q3 整改评价</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" data-bs-toggle="tab" href="#tab-q4">Q4 问题统计</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" data-bs-toggle="tab" href="#tab-q5">Q5 选人用人建议</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" data-bs-toggle="tab" href="#tab-q6">Q6 一报告两评议建议</a>
+                </li>
+            </ul>
+        </div>
+        <div class="card-body">
+            <div class="tab-content">
+                <!-- Q1-Q3 共用表格 -->
+                <div class="tab-pane active" id="tab-q123">
+                    <div class="table-responsive">
+                        <table class="table table-bordered stats-table" id="table-q123">
+                            <thead>
+                                <tr>
+                                    <th>归属单位</th>
+                                    <th>好</th>
+                                    <th>较好</th>
+                                    <th>一般</th>
+                                    <th>差</th>
+                                    <th>总计</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbody-q123"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Q4 Tab -->
+                <div class="tab-pane" id="tab-q4">
+                    <div class="table-responsive">
+                        <table class="table table-bordered stats-table" id="table-q4">
+                            <thead>
+                                <tr>
+                                    <th>归属单位</th>
+                                    <th>问题1</th>
+                                    <th>问题2</th>
+                                    <th>问题3</th>
+                                    <th>问题4</th>
+                                    <th>问题5</th>
+                                    <th>问题6</th>
+                                    <th>问题7</th>
+                                    <th>问题8</th>
+                                    <th>问题9</th>
+                                    <th>问题10</th>
+                                    <th>问题11</th>
+                                    <th>问题12</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbody-q4"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Q5 Tab -->
+                <div class="tab-pane" id="tab-q5">
+                    <div id="list-q5"></div>
+                </div>
+
+                <!-- Q6 Tab -->
+                <div class="tab-pane" id="tab-q6">
+                    <div id="list-q6"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block script_extra %}
+<script>
+    let currentQuestion = 'q1';
+
+    document.addEventListener('DOMContentLoaded', () => {
+        loadQ123('q1');
+
+        // Tab切换事件
+        document.querySelectorAll('.nav-tabs .nav-link').forEach(tab => {
+            tab.addEventListener('shown.bs.tab', function (e) {
+                const question = this.dataset.question;
+                const target = this.getAttribute('href');
+
+                if (question) {
+                    currentQuestion = question;
+                    loadQ123(question);
+                } else if (target === '#tab-q4') {
+                    loadQ4();
+                } else if (target === '#tab-q5') {
+                    loadText('q5');
+                } else if (target === '#tab-q6') {
+                    loadText('q6');
+                }
+            });
+        });
+    });
+
+    function calculate() {
+        if (!confirm('确认重新计算统计数据？')) return;
+        fetch('/api/selection-stats/calculate', { method: 'POST' })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    alert('计算完成');
+                    loadQ123(currentQuestion);
+                } else {
+                    alert('计算失败: ' + data.msg);
+                }
+            });
+    }
+
+    function clearData() {
+        if (!confirm('确认清空所有统计数据？')) return;
+        fetch('/api/selection-stats/clear', { method: 'POST' })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    alert('已清空');
+                    document.getElementById('tbody-q123').innerHTML = '';
+                    document.getElementById('tbody-q4').innerHTML = '';
+                    document.getElementById('list-q5').innerHTML = '';
+                    document.getElementById('list-q6').innerHTML = '';
+                } else {
+                    alert('清空失败: ' + data.msg);
+                }
+            });
+    }
+
+    function exportData() {
+        window.location.href = '/api/selection-stats/export';
+    }
+
+    function loadQ123(question) {
+        fetch(`/api/selection-stats/q123?question=${question}`)
+            .then(r => r.json())
+            .then(data => {
+                const tbody = document.getElementById('tbody-q123');
+                tbody.innerHTML = '';
+
+                data.data.forEach((row, idx) => {
+                    const isTotal = row.dept_name === '总计';
+                    tbody.innerHTML += `
+          <tr class="${isTotal ? 'total-row' : ''}">
+            <td>${row.dept_name || ''}</td>
+            <td>${row.count_good}</td>
+            <td>${row.count_fair}</td>
+            <td>${row.count_average}</td>
+            <td>${row.count_poor}</td>
+            <td>${row.count_total}</td>
+          </tr>
+        `;
+                });
+            });
+    }
+
+    function loadQ4() {
+        fetch('/api/selection-stats/q4')
+            .then(r => r.json())
+            .then(data => {
+                const tbody = document.getElementById('tbody-q4');
+                tbody.innerHTML = '';
+
+                data.data.forEach(row => {
+                    const isTotal = row.dept_name === '总计';
+                    tbody.innerHTML += `
+          <tr class="${isTotal ? 'total-row' : ''}">
+            <td>${row.dept_name || ''}</td>
+            <td>${row.p1 || 0}</td>
+            <td>${row.p2 || 0}</td>
+            <td>${row.p3 || 0}</td>
+            <td>${row.p4 || 0}</td>
+            <td>${row.p5 || 0}</td>
+            <td>${row.p6 || 0}</td>
+            <td>${row.p7 || 0}</td>
+            <td>${row.p8 || 0}</td>
+            <td>${row.p9 || 0}</td>
+            <td>${row.p10 || 0}</td>
+            <td>${row.p11 || 0}</td>
+            <td>${row.p12 || 0}</td>
+          </tr>
+        `;
+                });
+            });
+    }
+
+    function loadText(question) {
+        fetch(`/api/selection-stats/text?question=${question}`)
+            .then(r => r.json())
+            .then(data => {
+                const container = document.getElementById(`list-${question}`);
+
+                if (data.data.length === 0) {
+                    container.innerHTML = '<div class="text-muted p-3">暂无建议数据</div>';
+                    return;
+                }
+
+                container.innerHTML = data.data.map(row => `
+        <div class="suggestion-item">
+          <span class="suggestion-dept">[${row.dept_name}]</span>
+          ${row.suggestion}
+        </div>
+      `).join('');
+            });
+    }
+</script>
+{% endblock %}

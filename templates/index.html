@@ -1,5 +1,50 @@
 {% extends "base.html" %}
 
+{% block head_extra %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  .stat-card {
+    transition: transform 0.2s, box-shadow 0.2s;
+  }
+
+  .stat-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  }
+
+  .stat-value {
+    font-size: 2.5rem;
+    font-weight: 700;
+    line-height: 1;
+  }
+
+  .module-item {
+    display: flex;
+    align-items: center;
+    padding: 0.75rem 0;
+    border-bottom: 1px solid #f0f0f0;
+  }
+
+  .module-item:last-child {
+    border-bottom: none;
+  }
+
+  .module-name {
+    flex: 1;
+  }
+
+  .module-count {
+    font-weight: 600;
+    color: #206bc4;
+  }
+
+  .chart-container {
+    position: relative;
+    height: 200px;
+  }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="container-fluid">
   <div class="row row-cards mb-4">
@@ -9,71 +54,146 @@
     </div>
   </div>
 
-  <div class="row row-deck row-cards">
-
+  <!-- 顶部指标卡片 -->
+  <div class="row row-deck row-cards mb-4">
     <div class="col-sm-6 col-lg-3">
-      <div class="card">
+      <div class="card stat-card">
         <div class="card-body">
           <div class="d-flex align-items-center">
             <div class="subheader">已配置部门</div>
             <div class="ms-auto lh-1">
-              <span class="bg-primary-lt p-1 rounded d-inline-flex align-items-center lh-1">
-                <i class="ti ti-building fs-3"></i>
+              <span class="bg-primary-lt p-2 rounded d-inline-flex align-items-center">
+                <i class="ti ti-building fs-2"></i>
               </span>
             </div>
           </div>
-          <div class="d-flex align-items-baseline">
-            <div class="h1 mb-0 me-2">{{ dept_count }}</div>
-            <div class="me-auto">
-              <span class="text-green d-inline-flex align-items-center lh-1">
-                个
-              </span>
-            </div>
+          <div class="d-flex align-items-baseline mt-2">
+            <div class="stat-value text-primary" id="stat-dept">-</div>
+            <div class="ms-2 text-muted">个</div>
           </div>
         </div>
       </div>
     </div>
 
     <div class="col-sm-6 col-lg-3">
-      <div class="card">
+      <div class="card stat-card">
         <div class="card-body">
           <div class="d-flex align-items-center">
             <div class="subheader">被考核人员</div>
             <div class="ms-auto lh-1">
-              <span class="bg-blue-lt p-1 rounded d-inline-flex align-items-center lh-1">
-                <i class="ti ti-users fs-3"></i>
+              <span class="bg-green-lt p-2 rounded d-inline-flex align-items-center">
+                <i class="ti ti-users fs-2"></i>
               </span>
             </div>
           </div>
-          <div class="d-flex align-items-baseline">
-            <div class="h1 mb-3 me-2">0</div>
-            <div class="me-auto"><span class="text-muted">人</span></div>
+          <div class="d-flex align-items-baseline mt-2">
+            <div class="stat-value text-green" id="stat-examinee">-</div>
+            <div class="ms-2 text-muted">人</div>
           </div>
         </div>
       </div>
     </div>
 
     <div class="col-sm-6 col-lg-3">
-      <div class="card">
+      <div class="card stat-card">
         <div class="card-body">
           <div class="d-flex align-items-center">
-            <div class="subheader">当前进度</div>
+            <div class="subheader">评分账号</div>
             <div class="ms-auto lh-1">
-              <span class="bg-yellow-lt p-1 rounded d-inline-flex align-items-center lh-1">
-                <i class="ti ti-chart-pie fs-3"></i>
+              <span class="bg-purple-lt p-2 rounded d-inline-flex align-items-center">
+                <i class="ti ti-user-check fs-2"></i>
               </span>
             </div>
           </div>
-          <div class="d-flex align-items-baseline">
-            <div class="h1 mb-3 me-2">0%</div>
-          </div>
-          <div class="progress progress-xs">
-            <div class="progress-bar bg-yellow" style="width: 0%" role="progressbar"></div>
+          <div class="d-flex align-items-baseline mt-2">
+            <div class="stat-value text-purple" id="stat-account">-</div>
+            <div class="ms-2 text-muted">个</div>
           </div>
         </div>
       </div>
     </div>
 
+    <div class="col-sm-6 col-lg-3">
+      <div class="card stat-card">
+        <div class="card-body">
+          <div class="d-flex align-items-center">
+            <div class="subheader">提交进度</div>
+            <div class="ms-auto lh-1">
+              <span class="bg-yellow-lt p-2 rounded d-inline-flex align-items-center">
+                <i class="ti ti-chart-pie fs-2"></i>
+              </span>
+            </div>
+          </div>
+          <div class="d-flex align-items-baseline mt-2">
+            <div class="stat-value text-yellow" id="stat-progress">-</div>
+            <div class="ms-2 text-muted">%</div>
+          </div>
+          <div class="progress progress-sm mt-2">
+            <div class="progress-bar bg-yellow" id="progress-bar" style="width: 0%" role="progressbar"></div>
+          </div>
+          <div class="text-muted small mt-1"><span id="stat-submitted">0</span> / <span id="stat-total">0</span> 已提交
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 中间区域 -->
+  <div class="row row-deck row-cards mb-4">
+    <div class="col-lg-5">
+      <div class="card">
+        <div class="card-header">
+          <h3 class="card-title">提交进度分布</h3>
+        </div>
+        <div class="card-body">
+          <div class="chart-container">
+            <canvas id="progressChart"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-7">
+      <div class="card">
+        <div class="card-header">
+          <h3 class="card-title">各模块完成情况</h3>
+        </div>
+        <div class="card-body">
+          <div class="module-item">
+            <div class="module-name">
+              <i class="ti ti-clipboard-check me-2 text-primary"></i>民主测评打分
+            </div>
+            <div class="module-count" id="mod-democratic">-</div>
+            <div class="text-muted ms-1">人已完成</div>
+          </div>
+          <div class="module-item">
+            <div class="module-name">
+              <i class="ti ti-users-group me-2 text-green"></i>领导班子评价
+            </div>
+            <div class="module-count" id="mod-team">-</div>
+            <div class="text-muted ms-1">人已完成</div>
+          </div>
+          <div class="module-item">
+            <div class="module-name">
+              <i class="ti ti-award me-2 text-orange"></i>正职推荐
+            </div>
+            <div class="module-count" id="mod-rec-principal">-</div>
+            <div class="text-muted ms-1">人已完成</div>
+          </div>
+          <div class="module-item">
+            <div class="module-name">
+              <i class="ti ti-medal me-2 text-purple"></i>副职推荐
+            </div>
+            <div class="module-count" id="mod-rec-deputy">-</div>
+            <div class="text-muted ms-1">人已完成</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 快捷操作 -->
+  <div class="row row-cards">
     <div class="col-12">
       <div class="card">
         <div class="card-header">
@@ -81,25 +201,47 @@
         </div>
         <div class="card-body">
           <div class="row">
-            <div class="col-md-4 mb-3">
-              <a href="{{ url_for('department_config') }}" class="card card-link card-link-pop">
-                <div class="card-body">
-                  <span class="avatar bg-primary text-white mb-3 rounded">
-                    <i class="ti ti-settings"></i>
+            <div class="col-md-3 col-sm-6 mb-3">
+              <a href="{{ url_for('department_config') }}" class="card card-link card-link-pop h-100">
+                <div class="card-body text-center">
+                  <span class="avatar avatar-lg bg-primary text-white mb-3 rounded">
+                    <i class="ti ti-building"></i>
                   </span>
-                  <h3 class="card-title">去配置部门</h3>
-                  <p class="text-muted">导入Excel或手动管理部门及名额。</p>
+                  <h4 class="card-title mb-1">部门配置</h4>
+                  <p class="text-muted small mb-0">导入或管理部门</p>
                 </div>
               </a>
             </div>
-            <div class="col-md-4 mb-3">
-              <a href="#" class="card card-link card-link-pop">
-                <div class="card-body">
-                  <span class="avatar bg-green text-white mb-3 rounded">
+            <div class="col-md-3 col-sm-6 mb-3">
+              <a href="{{ url_for('account_generation') }}" class="card card-link card-link-pop h-100">
+                <div class="card-body text-center">
+                  <span class="avatar avatar-lg bg-green text-white mb-3 rounded">
                     <i class="ti ti-user-plus"></i>
                   </span>
-                  <h3 class="card-title">生成账号</h3>
-                  <p class="text-muted">为打分人员批量生成登录凭证。</p>
+                  <h4 class="card-title mb-1">账号管理</h4>
+                  <p class="text-muted small mb-0">生成评分账号</p>
+                </div>
+              </a>
+            </div>
+            <div class="col-md-3 col-sm-6 mb-3">
+              <a href="{{ url_for('examinee_summary_page') }}" class="card card-link card-link-pop h-100">
+                <div class="card-body text-center">
+                  <span class="avatar avatar-lg bg-purple text-white mb-3 rounded">
+                    <i class="ti ti-chart-bar"></i>
+                  </span>
+                  <h4 class="card-title mb-1">成绩汇总</h4>
+                  <p class="text-muted small mb-0">查看考核结果</p>
+                </div>
+              </a>
+            </div>
+            <div class="col-md-3 col-sm-6 mb-3">
+              <a href="{{ url_for('team_score_summary_page') }}" class="card card-link card-link-pop h-100">
+                <div class="card-body text-center">
+                  <span class="avatar avatar-lg bg-orange text-white mb-3 rounded">
+                    <i class="ti ti-users-group"></i>
+                  </span>
+                  <h4 class="card-title mb-1">班子汇总</h4>
+                  <p class="text-muted small mb-0">领导班子得分</p>
                 </div>
               </a>
             </div>
@@ -107,7 +249,83 @@
         </div>
       </div>
     </div>
-
   </div>
 </div>
+{% endblock %}
+
+{% block script_extra %}
+<script>
+  let progressChart = null;
+
+  document.addEventListener('DOMContentLoaded', function () {
+    loadDashboardStats();
+  });
+
+  function loadDashboardStats() {
+    fetch('/api/dashboard/stats')
+      .then(r => r.json())
+      .then(data => {
+        if (!data.success) {
+          console.error('Failed to load stats:', data.msg);
+          return;
+        }
+
+        // Update stat cards
+        document.getElementById('stat-dept').textContent = data.dept_count;
+        document.getElementById('stat-examinee').textContent = data.examinee_count;
+        document.getElementById('stat-account').textContent = data.account_total;
+        document.getElementById('stat-progress').textContent = data.progress_percent;
+        document.getElementById('stat-submitted').textContent = data.account_submitted;
+        document.getElementById('stat-total').textContent = data.account_total;
+
+        // Update progress bar
+        document.getElementById('progress-bar').style.width = data.progress_percent + '%';
+
+        // Update modules
+        document.getElementById('mod-democratic').textContent = data.modules.democratic;
+        document.getElementById('mod-team').textContent = data.modules.team;
+        document.getElementById('mod-rec-principal').textContent = data.modules.rec_principal;
+        document.getElementById('mod-rec-deputy').textContent = data.modules.rec_deputy;
+
+        // Render chart
+        renderProgressChart(data.account_submitted, data.account_total - data.account_submitted);
+      })
+      .catch(err => console.error('Error loading stats:', err));
+  }
+
+  function renderProgressChart(submitted, pending) {
+    const ctx = document.getElementById('progressChart').getContext('2d');
+
+    if (progressChart) {
+      progressChart.destroy();
+    }
+
+    progressChart = new Chart(ctx, {
+      type: 'doughnut',
+      data: {
+        labels: ['已提交', '未提交'],
+        datasets: [{
+          data: [submitted, pending],
+          backgroundColor: ['#2fb344', '#f0f0f0'],
+          borderWidth: 0,
+          hoverOffset: 4
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        cutout: '70%',
+        plugins: {
+          legend: {
+            position: 'bottom',
+            labels: {
+              padding: 20,
+              usePointStyle: true
+            }
+          }
+        }
+      }
+    });
+  }
+</script>
 {% endblock %}

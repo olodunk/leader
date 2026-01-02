@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+
+{% block head_extra %}
+<style>
+    .stats-table th {
+        background-color: #f8f9fa;
+        text-align: center;
+        white-space: nowrap;
+    }
+
+    .stats-table td {
+        text-align: center;
+    }
+
+    .stats-table td:nth-child(1),
+    .stats-table td:nth-child(2),
+    .stats-table td:nth-child(3) {
+        text-align: left;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Page Header -->
+    <div class="row g-2 align-items-center mb-3">
+        <div class="col">
+            <h2 class="page-title">新提拔任用干部民主评议表统计</h2>
+            <div class="text-muted mt-1">共 <span id="total-count">0</span> 条记录</div>
+        </div>
+        <div class="col-auto ms-auto d-print-none d-flex align-items-center gap-2">
+            <button class="btn btn-primary" onclick="calculate()">
+                <i class="ti ti-calculator me-2"></i>一键计算
+            </button>
+            <button class="btn btn-ghost-danger" onclick="clearData()">
+                <i class="ti ti-trash me-2"></i>一键清空
+            </button>
+            <div class="vr mx-1"></div>
+            <button class="btn btn-white" onclick="exportData()">
+                <i class="ti ti-download me-2"></i>导出Excel
+            </button>
+        </div>
+    </div>
+
+    <!-- Table -->
+    <div class="card">
+        <div class="table-responsive">
+            <table class="table table-bordered table-vcenter stats-table" id="dataTable">
+                <thead>
+                    <tr>
+                        <th>姓名</th>
+                        <th>部门</th>
+                        <th>单位</th>
+                        <th>认同</th>
+                        <th>基本认同</th>
+                        <th>不认同</th>
+                        <th>不了解</th>
+                        <th>总计</th>
+                    </tr>
+                </thead>
+                <tbody id="tbody"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block script_extra %}
+<script>
+    document.addEventListener('DOMContentLoaded', loadData);
+
+    function calculate() {
+        if (!confirm('确认重新计算统计数据？')) return;
+        fetch('/api/new-promotion-stats/calculate', { method: 'POST' })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    alert(data.msg);
+                    loadData();
+                } else {
+                    alert('计算失败: ' + data.msg);
+                }
+            });
+    }
+
+    function clearData() {
+        if (!confirm('确认清空所有统计数据？')) return;
+        fetch('/api/new-promotion-stats/clear', { method: 'POST' })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    alert('已清空');
+                    loadData();
+                } else {
+                    alert('清空失败: ' + data.msg);
+                }
+            });
+    }
+
+    function exportData() {
+        window.location.href = '/api/new-promotion-stats/export';
+    }
+
+    function loadData() {
+        fetch('/api/new-promotion-stats/list')
+            .then(r => r.json())
+            .then(data => {
+                const tbody = document.getElementById('tbody');
+                tbody.innerHTML = '';
+
+                document.getElementById('total-count').textContent = data.data.length;
+
+                data.data.forEach(row => {
+                    tbody.innerHTML += `
+          <tr>
+            <td>${row.name || ''}</td>
+            <td>${row.dept_name || ''}</td>
+            <td>${row.unit_name || ''}</td>
+            <td>${row.count_agree}</td>
+            <td>${row.count_basic_agree}</td>
+            <td>${row.count_disagree}</td>
+            <td>${row.count_unknown}</td>
+            <td>${row.count_total}</td>
+          </tr>
+        `;
+                });
+            });
+    }
+</script>
+{% endblock %}

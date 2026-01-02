@@ -517,26 +517,45 @@ def admin_login():
 
 
 
-
 @app.route('/admin/dashboard')
-
 @admin_required
-
 def admin_dashboard():
+    """管理后台首页"""
+    return render_template('index.html')
 
-    """管理后台首页 (原 / )"""
-
+@app.route('/api/dashboard/stats')
+@admin_required
+def dashboard_stats():
+    """仪表盘统计数据API"""
     db = get_db()
-
     try:
-
         dept_count = db.execute('SELECT COUNT(*) FROM department_config').fetchone()[0]
-
-    except:
-
-        dept_count = 0
-
-    return render_template('index.html', dept_count=dept_count)
+        examinee_count = db.execute('SELECT COUNT(*) FROM middle_managers').fetchone()[0]
+        account_total = db.execute('SELECT COUNT(*) FROM evaluation_accounts').fetchone()[0]
+        account_submitted = db.execute("SELECT COUNT(*) FROM evaluation_accounts WHERE status='否'").fetchone()[0]
+        
+        # 各模块完成人数
+        democratic_done = db.execute('SELECT COUNT(DISTINCT rater_account) FROM democratic_scores').fetchone()[0]
+        team_done = db.execute('SELECT COUNT(DISTINCT rater_account) FROM team_scores').fetchone()[0]
+        rec_principal_done = db.execute('SELECT COUNT(DISTINCT rater_account) FROM recommendation_scores_principal').fetchone()[0]
+        rec_deputy_done = db.execute('SELECT COUNT(DISTINCT rater_account) FROM recommendation_scores_deputy').fetchone()[0]
+        
+        return jsonify({
+            'success': True,
+            'dept_count': dept_count,
+            'examinee_count': examinee_count,
+            'account_total': account_total,
+            'account_submitted': account_submitted,
+            'progress_percent': round(account_submitted / account_total * 100, 1) if account_total > 0 else 0,
+            'modules': {
+                'democratic': democratic_done,
+                'team': team_done,
+                'rec_principal': rec_principal_done,
+                'rec_deputy': rec_deputy_done
+            }
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'msg': str(e)})
 
 
 
@@ -5839,7 +5858,7 @@ def assessment_new_promotion():
 
         SELECT * FROM center_grassroots_leaders 
 
-        WHERE dept_code=? 
+        WHERE dept_code=? AND is_newly_promoted='是'
 
         ORDER BY sort_no ASC, id ASC
 
@@ -7634,6 +7653,307 @@ def handle_rec_summary_request(rec_type, action):
 def api_recommendation_summary_router(rec_type, action):
     if rec_type not in ['principal', 'deputy']: return "Invalid Type", 400
     return handle_rec_summary_request(rec_type, action)
+
+# ==========================================
+# 21. 干部选拔任用民主评议表统计
+# ==========================================
+
+@app.route('/admin/stats/selection-appointment')
+@admin_required
+def selection_stats_page():
+    return render_template('selection_stats.html')
+
+@app.route('/api/selection-stats/calculate', methods=['POST'])
+@admin_required
+def selection_stats_calculate():
+    """一键计算统计数据"""
+    db = get_db()
+    try:
+        cursor = db.cursor()
+        
+        # 清空旧数据
+        cursor.execute('DELETE FROM selection_stats_q123')
+        cursor.execute('DELETE FROM selection_stats_q4')
+        cursor.execute('DELETE FROM selection_stats_text')
+        
+        # 获取部门映射
+        dept_map = {}
+        for row in db.execute("SELECT dept_code, dept_name FROM department_config WHERE dept_code IN ('V','W','X','Y')").fetchall():
+            dept_map[row['dept_code']] = row['dept_name']
+        
+        # ========== Q1-Q3 统计 ==========
+        for q_field, q_name in [('q1_overall', 'q1'), ('q2_supervision', 'q2'), ('q3_rectification', 'q3')]:
+            for dept_code in ['V', 'W', 'X', 'Y']:
+                dept_name = dept_map.get(dept_code, dept_code)
+                
+                # 统计各选项数量
+                counts = {'好': 0, '较好': 0, '一般': 0, '差': 0}
+                rows = db.execute(f"SELECT {q_field} FROM evaluation_selection_appointment WHERE dept_code=?", (dept_code,)).fetchall()
+                
+                for r in rows:
+                    val = r[0]
+                    if val in counts:
+                        counts[val] += 1
+                
+                total = sum(counts.values())
+                
+                cursor.execute('''
+                    INSERT INTO selection_stats_q123 (question, dept_code, dept_name, count_good, count_fair, count_average, count_poor, count_total)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (q_name, dept_code, dept_name, counts['好'], counts['较好'], counts['一般'], counts['差'], total))
+        
+        # ========== Q4 统计 ==========
+        for dept_code in ['V', 'W', 'X', 'Y']:
+            dept_name = dept_map.get(dept_code, dept_code)
+            p_counts = {i: 0 for i in range(1, 13)}
+            
+            rows = db.execute("SELECT q4_problems FROM evaluation_selection_appointment WHERE dept_code=?", (dept_code,)).fetchall()
+            for r in rows:
+                if r['q4_problems']:
+                    for p in r['q4_problems'].split(','):
+                        p = p.strip()
+                        if p.isdigit() and 1 <= int(p) <= 12:
+                            p_counts[int(p)] += 1
+            
+            cursor.execute('''
+                INSERT INTO selection_stats_q4 (dept_code, dept_name, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (dept_code, dept_name, p_counts[1], p_counts[2], p_counts[3], p_counts[4], p_counts[5], p_counts[6],
+                  p_counts[7], p_counts[8], p_counts[9], p_counts[10], p_counts[11], p_counts[12]))
+        
+        # ========== Q5/Q6 文本汇总 ==========
+        for q_field, q_name in [('q5_suggestions_employment', 'q5'), ('q6_suggestions_report', 'q6')]:
+            rows = db.execute(f"SELECT dept_code, {q_field} FROM evaluation_selection_appointment WHERE {q_field} IS NOT NULL AND {q_field} != ''").fetchall()
+            for r in rows:
+                dept_name = dept_map.get(r['dept_code'], r['dept_code'])
+                cursor.execute('''
+                    INSERT INTO selection_stats_text (question, dept_code, dept_name, suggestion)
+                    VALUES (?, ?, ?, ?)
+                ''', (q_name, r['dept_code'], dept_name, r[q_field]))
+        
+        db.commit()
+        return jsonify({'success': True, 'msg': '计算完成'})
+    except Exception as e:
+        return jsonify({'success': False, 'msg': str(e)})
+
+@app.route('/api/selection-stats/clear', methods=['POST'])
+@admin_required
+def selection_stats_clear():
+    """一键清空"""
+    db = get_db()
+    try:
+        db.execute('DELETE FROM selection_stats_q123')
+        db.execute('DELETE FROM selection_stats_q4')
+        db.execute('DELETE FROM selection_stats_text')
+        db.commit()
+        return jsonify({'success': True, 'msg': '已清空'})
+    except Exception as e:
+        return jsonify({'success': False, 'msg': str(e)})
+
+@app.route('/api/selection-stats/q123')
+@admin_required
+def selection_stats_q123():
+    """获取Q1-Q3统计数据"""
+    db = get_db()
+    question = request.args.get('question', 'q1')
+    
+    rows = db.execute('SELECT * FROM selection_stats_q123 WHERE question=? ORDER BY dept_code', (question,)).fetchall()
+    data = [dict(r) for r in rows]
+    
+    # 计算总计行
+    totals = {'dept_name': '总计', 'count_good': 0, 'count_fair': 0, 'count_average': 0, 'count_poor': 0, 'count_total': 0}
+    for d in data:
+        totals['count_good'] += d['count_good']
+        totals['count_fair'] += d['count_fair']
+        totals['count_average'] += d['count_average']
+        totals['count_poor'] += d['count_poor']
+        totals['count_total'] += d['count_total']
+    
+    data.append(totals)
+    return jsonify({'data': data})
+
+@app.route('/api/selection-stats/q4')
+@admin_required
+def selection_stats_q4():
+    """获取Q4统计数据"""
+    db = get_db()
+    rows = db.execute('SELECT * FROM selection_stats_q4 ORDER BY dept_code').fetchall()
+    data = [dict(r) for r in rows]
+    
+    # 计算总计行
+    totals = {'dept_name': '总计'}
+    for i in range(1, 13):
+        totals[f'p{i}'] = sum(d[f'p{i}'] for d in data)
+    
+    data.append(totals)
+    return jsonify({'data': data})
+
+@app.route('/api/selection-stats/text')
+@admin_required
+def selection_stats_text():
+    """获取Q5/Q6文本数据"""
+    db = get_db()
+    question = request.args.get('question', 'q5')
+    
+    rows = db.execute('SELECT * FROM selection_stats_text WHERE question=? ORDER BY dept_code', (question,)).fetchall()
+    return jsonify({'data': [dict(r) for r in rows]})
+
+@app.route('/api/selection-stats/export')
+@admin_required
+def selection_stats_export():
+    """导出Excel"""
+    db = get_db()
+    
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        # Q1-Q3
+        for q in ['q1', 'q2', 'q3']:
+            rows = db.execute('SELECT dept_name as 归属单位, count_good as 好, count_fair as 较好, count_average as 一般, count_poor as 差, count_total as 总计 FROM selection_stats_q123 WHERE question=?', (q,)).fetchall()
+            if rows:
+                df = pd.DataFrame([dict(r) for r in rows])
+                # 添加总计行
+                totals = df.sum(numeric_only=True).to_dict()
+                totals['归属单位'] = '总计'
+                df = pd.concat([df, pd.DataFrame([totals])], ignore_index=True)
+                sheet_name = {'q1': 'Q1-总体评价', 'q2': 'Q2-监督评价', 'q3': 'Q3-整改评价'}[q]
+                df.to_excel(writer, index=False, sheet_name=sheet_name)
+        
+        # Q4
+        rows = db.execute('SELECT dept_name as 归属单位, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12 FROM selection_stats_q4').fetchall()
+        if rows:
+            df = pd.DataFrame([dict(r) for r in rows])
+            # 重命名列
+            cols = {'p1': '问题1', 'p2': '问题2', 'p3': '问题3', 'p4': '问题4', 'p5': '问题5', 'p6': '问题6',
+                    'p7': '问题7', 'p8': '问题8', 'p9': '问题9', 'p10': '问题10', 'p11': '问题11', 'p12': '问题12'}
+            df = df.rename(columns=cols)
+            # 添加总计行
+            totals = df.select_dtypes(include=['number']).sum().to_dict()
+            totals['归属单位'] = '总计'
+            df = pd.concat([df, pd.DataFrame([totals])], ignore_index=True)
+            df.to_excel(writer, index=False, sheet_name='Q4-问题统计')
+        
+        # Q5/Q6
+        for q, sheet in [('q5', 'Q5-选人用人建议'), ('q6', 'Q6-一报告两评议建议')]:
+            rows = db.execute('SELECT dept_name as 归属单位, suggestion as 建议内容 FROM selection_stats_text WHERE question=?', (q,)).fetchall()
+            if rows:
+                df = pd.DataFrame([dict(r) for r in rows])
+                df.to_excel(writer, index=False, sheet_name=sheet)
+    
+    output.seek(0)
+    return send_file(output, as_attachment=True, download_name='干部选拔任用评议表统计.xlsx')
+
+# ==========================================
+# 22. 新提拔任用干部民主评议表统计
+# ==========================================
+
+UNIT_NAME_MAP = {
+    'X': '兰州化工研究中心',
+    'Y': '大庆化工研究中心'
+}
+
+@app.route('/admin/stats/new-promotion')
+@admin_required
+def new_promotion_stats_page():
+    return render_template('new_promotion_stats.html')
+
+@app.route('/api/new-promotion-stats/calculate', methods=['POST'])
+@admin_required
+def new_promotion_stats_calculate():
+    """一键计算统计数据"""
+    db = get_db()
+    try:
+        import json
+        cursor = db.cursor()
+        cursor.execute('DELETE FROM new_promotion_stats')
+        
+        # 获取候选人列表
+        candidates = db.execute(
+            "SELECT id, name, dept_name, dept_code FROM center_grassroots_leaders WHERE dept_code IN ('X','Y') AND is_newly_promoted='是'"
+        ).fetchall()
+        
+        if not candidates:
+            return jsonify({'success': True, 'msg': '无候选人数据'})
+        
+        # 获取所有评议数据（包含部门信息）
+        evaluations = db.execute('SELECT dept_code, selections FROM evaluation_new_promotion').fetchall()
+        
+        # 统计每个候选人的票数（只统计同部门的投票）
+        for cand in candidates:
+            cid = str(cand['id'])
+            cand_dept = cand['dept_code']
+            counts = {'agree': 0, 'basic_agree': 0, 'disagree': 0, 'unknown': 0}
+            
+            for ev in evaluations:
+                # 只统计同部门账号的投票
+                if ev['dept_code'] != cand_dept:
+                    continue
+                    
+                if ev['selections']:
+                    selections = json.loads(ev['selections'])
+                    if cid in selections:
+                        val = selections[cid]
+                        if val in counts:
+                            counts[val] += 1
+            
+            total = sum(counts.values())
+            unit_name = UNIT_NAME_MAP.get(cand['dept_code'], cand['dept_code'])
+            
+            cursor.execute('''
+                INSERT INTO new_promotion_stats 
+                (candidate_id, name, dept_name, unit_name, dept_code, count_agree, count_basic_agree, count_disagree, count_unknown, count_total)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (cand['id'], cand['name'], cand['dept_name'], unit_name, cand['dept_code'],
+                  counts['agree'], counts['basic_agree'], counts['disagree'], counts['unknown'], total))
+        
+        db.commit()
+        return jsonify({'success': True, 'msg': f'计算完成，共 {len(candidates)} 条记录'})
+    except Exception as e:
+        return jsonify({'success': False, 'msg': str(e)})
+
+@app.route('/api/new-promotion-stats/clear', methods=['POST'])
+@admin_required
+def new_promotion_stats_clear():
+    """一键清空"""
+    db = get_db()
+    try:
+        db.execute('DELETE FROM new_promotion_stats')
+        db.commit()
+        return jsonify({'success': True, 'msg': '已清空'})
+    except Exception as e:
+        return jsonify({'success': False, 'msg': str(e)})
+
+@app.route('/api/new-promotion-stats/list')
+@admin_required
+def new_promotion_stats_list():
+    """获取统计数据"""
+    db = get_db()
+    rows = db.execute('SELECT * FROM new_promotion_stats ORDER BY dept_code, id').fetchall()
+    return jsonify({'data': [dict(r) for r in rows]})
+
+@app.route('/api/new-promotion-stats/export')
+@admin_required
+def new_promotion_stats_export():
+    """导出Excel"""
+    db = get_db()
+    
+    rows = db.execute('''
+        SELECT name as 姓名, dept_name as 部门, unit_name as 单位, 
+               count_agree as 认同, count_basic_agree as 基本认同, 
+               count_disagree as 不认同, count_unknown as 不了解, count_total as 总计
+        FROM new_promotion_stats ORDER BY dept_code, id
+    ''').fetchall()
+    
+    if not rows:
+        return "暂无数据", 404
+    
+    df = pd.DataFrame([dict(r) for r in rows])
+    
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, index=False, sheet_name='新提拔干部评议统计')
+    output.seek(0)
+    
+    return send_file(output, as_attachment=True, download_name='新提拔干部评议表统计.xlsx')
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)

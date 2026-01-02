@@ -69,10 +69,10 @@
         <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#sidebar-menu"><span
             class="navbar-toggler-icon"></span></button>
 
-        <h1 class="navbar-brand navbar-brand-autodark">
+        <h1 class="navbar-brand navbar-brand-autodark mb-0">
           <a href="{{ url_for('admin_dashboard') }}"
-            class="text-decoration-none text-primary d-flex align-items-center gap-2">
-            <i class="ti ti-chart-radar fs-2"></i><span class="text-dark">测评系统</span>
+            class="text-decoration-none d-flex align-items-center justify-content-start gap-2 w-100 ps-3">
+            <i class="ti ti-settings fs-2 text-primary"></i><span class="text-dark">后台管理</span>
           </a>
         </h1>
 
@@ -123,8 +123,6 @@
             </li>
 
 
-            <li class="nav-item"><a class="nav-link" href="#"><span class="nav-link-icon d-md-none d-lg-inline-block"><i
-                    class="ti ti-activity"></i></span><span class="nav-link-title">进度与结果</span></a></li>
 
             {% set config_active = request.endpoint in ['weight_config_dept', 'democratic_config',
             'leader_weight_config_page', 'leader_account_mapping_page'] %}
@@ -149,7 +147,8 @@
 
             {% set stats_active = request.endpoint in ['team_score_details', 'democratic_score_details',
             'examinee_summary_page', 'recommendation_details_principal', 'recommendation_details_deputy',
-            'recommendation_summary_principal', 'recommendation_summary_deputy', 'team_score_summary_page'] %}
+            'recommendation_summary_principal', 'recommendation_summary_deputy', 'team_score_summary_page',
+            'selection_stats_page', 'new_promotion_stats_page'] %}
             <li class="nav-item dropdown">
               <a class="nav-link dropdown-toggle {% if stats_active %}show{% endif %}" href="#navbar-stats"
                 data-bs-toggle="dropdown" data-bs-auto-close="false" role="button"
@@ -176,8 +175,10 @@
                       href="{{ url_for('recommendation_details_principal') }}">后备干部推荐（正职）明细</a>
                     <a class="dropdown-item {% if request.endpoint == 'recommendation_details_deputy' %}active{% endif %}"
                       href="{{ url_for('recommendation_details_deputy') }}">后备干部推荐（副职）明细</a>
-                    <a class="dropdown-item" href="#">新提拔任用干部民主评议表</a>
-                    <a class="dropdown-item" href="#">干部选拔任用工作民主评议表</a>
+                    <a class="dropdown-item {% if request.endpoint == 'new_promotion_stats_page' %}active{% endif %}"
+                      href="{{ url_for('new_promotion_stats_page') }}">新提拔任用干部民主评议表</a>
+                    <a class="dropdown-item {% if request.endpoint == 'selection_stats_page' %}active{% endif %}"
+                      href="{{ url_for('selection_stats_page') }}">干部选拔任用工作民主评议表</a>
                   </div>
                 </div>
               </div>
