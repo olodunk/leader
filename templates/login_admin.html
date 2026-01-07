@@ -5,14 +5,12 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta http-equiv="X-UA-Compatible" content="ie=edge" />
-    <title>管理后台登录 - 干部考核系统</title>
+    <title>管理后台登录 - 测评系统</title>
     <!-- CSS files -->
-    <link href="https://cdn.jsdelivr.net/npm/@tabler/core@latest/dist/css/tabler.min.css" rel="stylesheet" />
+    <link href="{{ url_for('static', filename='css/tabler.min.css') }}" rel="stylesheet" />
     <style>
-        @import url('https://rsms.me/inter/inter.css');
-
         :root {
-            --tblr-font-sans-serif: 'Inter Var', -apple-system, BlinkMacSystemFont, San Francisco, Segoe UI, Roboto, Helvetica Neue, sans-serif;
+            --tblr-font-sans-serif: -apple-system, BlinkMacSystemFont, San Francisco, Segoe UI, Roboto, Helvetica Neue, sans-serif;
         }
 
         body {
@@ -35,11 +33,11 @@
     <div class="page page-center">
         <div class="container container-tight py-4">
             <div class="text-center mb-4">
-                <h1>干部考核系统·管理后台</h1>
+                <h1>测评系统管理后台</h1>
             </div>
             <div class="card card-md">
                 <div class="card-body">
-                    <h2 class="h2 text-center mb-4">管理员登录</h2>
+
                     <form id="loginForm" onsubmit="return handleLogin(event)">
                         <div class="mb-3">
                             <label class="form-label">管理员账号</label>
@@ -67,7 +65,7 @@
     </div>
 
     <!-- Libs JS -->
-    <script src="https://cdn.jsdelivr.net/npm/@tabler/core@latest/dist/js/tabler.min.js"></script>
+    <script src="{{ url_for('static', filename='js/tabler.min.js') }}"></script>
     <script>
         async function handleLogin(e) {
             e.preventDefault();
